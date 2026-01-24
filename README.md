@@ -834,6 +834,14 @@ MIT
 
 ## 추가 리소스
 
+### 프로젝트 문서
+
+- **[설정 가이드 (SETUP_GUIDE.md)](docs/SETUP_GUIDE.md)** - 자신의 프로젝트에 LGTM 스택을 적용하는 10단계 가이드
+- [아키텍처 문서 (ARCHITECTURE.md)](docs/ARCHITECTURE.md) - 시스템 구조 및 데이터 흐름
+- [사용 가이드 (USAGE.md)](docs/USAGE.md) - 상세 사용법 및 커스터마이징
+
+### 외부 문서
+
 - [OpenTelemetry Java Agent 공식 문서](https://opentelemetry.io/docs/zero-code/java/agent/)
 - [Grafana LGTM Stack 가이드](https://grafana.com/docs/lgtm/)
 - [Micrometer Tracing 문서](https://micrometer.io/docs/tracing)
