@@ -41,37 +41,32 @@ docker-compose ps
 
 ## 아키텍처
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Spring Boot Application                       │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │            OpenTelemetry Java Agent                        │  │
-│  │  • HTTP 요청/응답 자동 추적                                │  │
-│  │  • JDBC 쿼리 자동 추적                                     │  │
-│  │  • 로그 MDC에 trace_id/span_id 주입                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │              TracingAspect (AOP)                           │  │
-│  │  • @Service/@Repository public 메서드 span 생성            │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│         Traces            Metrics              Logs              │
-│        (OTLP/HTTP)        (Scrape)           (Loki4j)           │
-└────────────┬─────────────────┬─────────────────┬────────────────┘
-             │                 │                 │
-             ▼                 ▼                 ▼
-┌────────────────┐  ┌──────────────────┐  ┌────────────────┐
-│  Tempo (3200)  │  │ Prometheus (9090)│  │  Loki (3100)   │
-│   분산 추적    │  │    메트릭 수집   │  │   로그 집계    │
-└───────┬────────┘  └────────┬─────────┘  └───────┬────────┘
-        │                    │                    │
-        └────────────────────┼────────────────────┘
-                             │
-                             ▼
-                  ┌──────────────────────┐
-                  │   Grafana (3000)     │
-                  │  Dashboard & Explore │
-                  └──────────────────────┘
+```mermaid
+flowchart TB
+    subgraph APP["Spring Boot Application"]
+        subgraph AGENT["OpenTelemetry Java Agent"]
+            A1["HTTP 요청/응답 자동 추적"]
+            A2["JDBC 쿼리 자동 추적"]
+            A3["로그 MDC에 trace_id 주입"]
+        end
+        subgraph AOP["TracingAspect (AOP)"]
+            B1["@Service/@Repository 메서드 span 생성"]
+        end
+    end
+
+    APP -->|"Traces (OTLP/HTTP)"| TEMPO
+    APP -->|"Metrics (Scrape)"| PROM
+    APP -->|"Logs (Loki4j)"| LOKI
+
+    TEMPO["Tempo :3200\n분산 추적"]
+    PROM["Prometheus :9090\n메트릭 수집"]
+    LOKI["Loki :3100\n로그 집계"]
+
+    TEMPO --> GRAFANA
+    PROM --> GRAFANA
+    LOKI --> GRAFANA
+
+    GRAFANA["Grafana :3000\nDashboard & Explore"]
 ```
 
 ## 트레이스 예시
