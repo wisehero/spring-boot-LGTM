@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Include observability-core logging configuration -->
+    <!-- observability-core 로깅 설정 포함 -->
     <include resource="logback-spring-observability.xml"/>
 
-    <!-- Set environment variables with defaults -->
+    <!-- 기본값과 함께 환경 변수 설정 -->
     <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="sample-app"/>
     <springProperty scope="context" name="ENV" source="spring.profiles.active" defaultValue="local"/>
     <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://localhost:3100"/>
 
-    <!-- Local profile - console only -->
+    <!-- 로컬 프로파일 - 콘솔만 사용 -->
     <springProfile name="!docker">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
     </springProfile>
 
-    <!-- Docker profile - console + Loki -->
+    <!-- Docker 프로파일 - 콘솔 + Loki -->
     <springProfile name="docker">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>

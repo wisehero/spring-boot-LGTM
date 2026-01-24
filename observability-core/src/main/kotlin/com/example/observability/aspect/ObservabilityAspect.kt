@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 /**
- * Enables @Observed annotation support for method-level observability.
+ * 메서드 레벨 관찰성을 위한 @Observed 어노테이션 지원을 활성화합니다.
  */
 @Configuration
 @ConditionalOnClass(ObservedAspect::class)

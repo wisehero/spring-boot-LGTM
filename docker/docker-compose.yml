@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # LGTM Stack
+  # LGTM 스택
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: prometheus
@@ -86,7 +86,7 @@ services:
     networks:
       - lgtm
 
-  # Sample Application
+  # 샘플 애플리케이션
   sample-app:
     build:
       context: ../
@@ -99,7 +99,7 @@ services:
       - LOKI_URL=http://loki:3100
       - APP_NAME=sample-app
       - ENV=docker
-      # OpenTelemetry Java Agent Configuration
+      # OpenTelemetry Java Agent 설정
       - OTEL_SERVICE_NAME=sample-app
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf

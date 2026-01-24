@@ -10,11 +10,11 @@ import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**
- * Request/Response logging filter.
+ * Request/Response 로깅 필터
  *
- * IMPORTANT: DO NOT manually propagate traceId/spanId to MDC.
- * Micrometer Tracing with micrometer-tracing-bridge-otel automatically
- * populates MDC with traceId and spanId.
+ * 중요: traceId/spanId를 MDC에 수동으로 전파하지 마세요.
+ * micrometer-tracing-bridge-otel을 사용하는 Micrometer Tracing이
+ * traceId와 spanId를 MDC에 자동으로 채웁니다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 100)
@@ -27,7 +27,7 @@ class RequestLoggingFilter : OncePerRequestFilter() {
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        // Skip actuator endpoints for cleaner logs
+        // 깔끔한 로그를 위해 actuator 엔드포인트 건너뛰기
         if (request.requestURI.startsWith("/actuator")) {
             filterChain.doFilter(request, response)
             return
@@ -35,7 +35,7 @@ class RequestLoggingFilter : OncePerRequestFilter() {
 
         val startTime = System.currentTimeMillis()
 
-        log.info(">>> {} {} (traceId in MDC)", request.method, request.requestURI)
+        log.info(">>> {} {} (MDC에 traceId 포함)", request.method, request.requestURI)
 
         try {
             filterChain.doFilter(request, response)

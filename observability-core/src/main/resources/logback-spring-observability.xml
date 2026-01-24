@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <included>
     <!--
-    OTel Java Agent auto-populates MDC with trace_id and span_id (snake_case).
-    Reference: https://opentelemetry.io/docs/zero-code/java/agent/
+    OTel Java Agent가 MDC에 trace_id와 span_id를 자동으로 추가합니다 (snake_case 형식).
+    참조: https://opentelemetry.io/docs/zero-code/java/agent/
     -->
 
-    <!-- Java Agent uses snake_case: trace_id, span_id -->
+    <!-- Java Agent는 snake_case를 사용: trace_id, span_id -->
     <property name="TRACE_PATTERN" value="%X{trace_id:-},%X{span_id:-}"/>
     <property name="LOG_PATTERN" value="%d{ISO8601} [%thread] %-5level %logger{36} - [${TRACE_PATTERN}] %msg%n"/>
 
-    <!-- Console Appender -->
+    <!-- 콘솔 Appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
         </encoder>
     </appender>
 
-    <!-- Loki4j Appender with trace correlation -->
+    <!-- 추적 상관관계를 포함한 Loki4j Appender -->
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <http>
             <url>${LOKI_URL:-http://localhost:3100}/loki/api/v1/push</url>
@@ -26,7 +26,7 @@
                 <pattern>app=${APP_NAME:-unknown},env=${ENV:-local},level=%level</pattern>
             </label>
             <message>
-                <!-- Java Agent uses trace_id (snake_case) -->
+                <!-- Java Agent는 trace_id를 사용 (snake_case) -->
                 <pattern>traceId=%X{trace_id:-none} spanId=%X{span_id:-none} | %d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
             </message>
         </format>

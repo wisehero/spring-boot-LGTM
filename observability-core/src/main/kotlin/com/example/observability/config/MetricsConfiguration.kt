@@ -27,7 +27,7 @@ class MetricsConfiguration {
     @Bean
     fun meterFilter(): MeterFilter {
         return MeterFilter.deny { id ->
-            // Deny high-cardinality metrics that could cause memory issues
+            // 메모리 문제를 일으킬 수 있는 높은 카디널리티 메트릭 거부
             val name = id.name
             name.startsWith("jvm.threads.") && id.getTag("state") != null &&
                 id.tags.count() > 3

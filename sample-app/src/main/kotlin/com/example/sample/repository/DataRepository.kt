@@ -19,26 +19,26 @@ class DataRepository {
     )
 
     fun findById(id: String): Map<String, Any>? {
-        log.info("Repository: Finding by id={}", id)
+        log.info("리포지토리: ID로 조회 중 id={}", id)
         Thread.sleep(50) // DB 쿼리 시뮬레이션
         return database[id]
     }
 
     fun findAll(): List<Map<String, Any>> {
-        log.info("Repository: Finding all records")
+        log.info("리포지토리: 전체 레코드 조회 중")
         Thread.sleep(100) // DB 쿼리 시뮬레이션
         return database.values.toList()
     }
 
     fun save(id: String, data: Map<String, Any>): Map<String, Any> {
-        log.info("Repository: Saving id={}", id)
+        log.info("리포지토리: 저장 중 id={}", id)
         Thread.sleep(80) // DB 쓰기 시뮬레이션
         database[id] = data
         return data
     }
 
     fun count(): Int {
-        log.debug("Repository: Counting records")
+        log.debug("리포지토리: 레코드 개수 세는 중")
         return database.size
     }
 }

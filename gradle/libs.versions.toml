@@ -28,7 +28,7 @@ opentelemetry-instrumentation-annotations = { module = "io.opentelemetry.instrum
 loki-logback-appender = { module = "com.github.loki4j:loki-logback-appender", version.ref = "loki4j" }
 
 [bundles]
-# Library 방식: 앱에서 직접 OTel SDK를 사용하여 traces 전송
+# 라이브러리 방식: 앱에서 직접 OTel SDK를 사용하여 traces 전송
 observability = [
     "spring-boot-starter-actuator",
     "spring-boot-starter-aop",

@@ -35,7 +35,7 @@ class SampleControllerTest {
     }
 
     @Test
-    fun `actuator metrics endpoint is accessible`() {
+    fun `actuator metrics 엔드포인트 접근 가능`() {
         val response = restTemplate.getForEntity("/actuator/metrics", Map::class.java)
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.body).isNotNull
@@ -45,7 +45,7 @@ class SampleControllerTest {
     }
 
     @Test
-    fun `actuator health endpoint returns UP`() {
+    fun `actuator health 엔드포인트가 UP 반환`() {
         val response = restTemplate.getForEntity("/actuator/health", Map::class.java)
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         @Suppress("UNCHECKED_CAST")

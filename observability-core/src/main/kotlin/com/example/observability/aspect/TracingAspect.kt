@@ -38,7 +38,7 @@ class TracingAspect {
     // Agent가 설정한 GlobalOpenTelemetry에서 Tracer 가져오기
     // lazy 초기화로 Agent 초기화 후에 호출
     private val tracer by lazy {
-        log.info("TracingAspect: Initializing tracer from GlobalOpenTelemetry (Agent)")
+        log.info("TracingAspect: GlobalOpenTelemetry에서 tracer 초기화 중 (Agent)")
         GlobalOpenTelemetry.getTracer("observability-aop", "1.0.0")
     }
 

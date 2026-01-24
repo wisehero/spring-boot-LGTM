@@ -22,7 +22,7 @@ dependencies {
     // OTel API - Agent가 런타임에 구현체 제공
     implementation("io.opentelemetry:opentelemetry-api:1.45.0")
 
-    // For Servlet Filter
+    // Servlet Filter용
     compileOnly("jakarta.servlet:jakarta.servlet-api")
 }
 

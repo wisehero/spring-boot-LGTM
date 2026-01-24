@@ -17,21 +17,21 @@ class SampleController(
 
     @GetMapping("/hello")
     fun hello(): Map<String, String> {
-        log.info("Controller: Handling /api/hello request")
+        log.info("컨트롤러: /api/hello 요청 처리 중")
         return mapOf("message" to "Hello from Spring Boot LGTM!")
     }
 
     @GetMapping("/slow")
     fun slow(): Map<String, String> {
-        log.info("Controller: Handling /api/slow request")
+        log.info("컨트롤러: /api/slow 요청 처리 중")
         Thread.sleep(2000) // 2초 지연
         return mapOf("message" to "Slow response completed")
     }
 
     @GetMapping("/error")
     fun error(): Map<String, String> {
-        log.error("Controller: Handling /api/error request - simulating error")
-        throw RuntimeException("Simulated error for observability testing")
+        log.error("컨트롤러: /api/error 요청 처리 중 - 에러 시뮬레이션")
+        throw RuntimeException("관측성 테스트를 위한 시뮬레이션 에러")
     }
 
     /**
@@ -40,7 +40,7 @@ class SampleController(
      */
     @GetMapping("/chain")
     fun chain(): Map<String, Any> {
-        log.info("Controller: Handling /api/chain request")
+        log.info("컨트롤러: /api/chain 요청 처리 중")
         val serviceResult = sampleService.performOperation()
         return mapOf(
             "message" to "Chain completed",
@@ -54,7 +54,7 @@ class SampleController(
      */
     @GetMapping("/users/{userId}")
     fun getUser(@PathVariable userId: String): Map<String, Any> {
-        log.info("Controller: Getting user {}", userId)
+        log.info("컨트롤러: 사용자 조회 중 {}", userId)
         val userData = sampleService.getUserData(userId)
         return if (userData != null) {
             mapOf("found" to true, "user" to userData)
@@ -69,7 +69,7 @@ class SampleController(
      */
     @GetMapping("/users")
     fun getAllUsers(): Map<String, Any> {
-        log.info("Controller: Getting all users with stats")
+        log.info("컨트롤러: 통계와 함께 전체 사용자 조회 중")
         return sampleService.getAllUsersWithStats()
     }
 
@@ -79,7 +79,7 @@ class SampleController(
      */
     @GetMapping("/complex")
     fun complexOperation(): Map<String, Any> {
-        log.info("Controller: Starting complex operation")
+        log.info("컨트롤러: 복잡한 작업 시작")
 
         // 여러 서비스 호출
         val user1 = sampleService.getUserData("user-1")
