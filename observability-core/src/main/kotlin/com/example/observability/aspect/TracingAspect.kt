@@ -20,7 +20,8 @@ import org.springframework.stereotype.Component
  * 이 Aspect는 Agent의 SDK를 사용하여 span을 생성하고,
  * Agent가 Tempo로 전송합니다.
  *
- * @Service, @Repository 클래스의 모든 public 메서드를 자동으로 추적합니다.
+ * com.example 패키지 하위의 모든 public 메서드를 자동으로 추적합니다.
+ * (Controller, Service, Repository, Component 등 모든 클래스 포함)
  *
  * 활성화: application.yml에서 observability.tracing.aop.enabled=true 설정
  */
@@ -42,19 +43,29 @@ class TracingAspect {
         GlobalOpenTelemetry.getTracer("observability-aop", "1.0.0")
     }
 
-    @Pointcut("within(@org.springframework.stereotype.Service *)")
-    fun serviceLayer() {}
+    /**
+     * com.example 패키지 하위의 모든 클래스
+     */
+    @Pointcut("within(com.example..*)")
+    fun applicationPackage() {}
 
-    @Pointcut("within(@org.springframework.stereotype.Repository *)")
-    fun repositoryLayer() {}
-
+    /**
+     * public 메서드만 대상
+     */
     @Pointcut("execution(public * *(..))")
     fun publicMethod() {}
 
     /**
-     * Service와 Repository 레이어의 모든 public 메서드를 span으로 추적
+     * Spring 프레임워크 내부 클래스 제외 (프록시, 설정 등)
      */
-    @Around("(serviceLayer() || repositoryLayer()) && publicMethod()")
+    @Pointcut("!within(com.example.observability..*)")
+    fun excludeObservabilityPackage() {}
+
+    /**
+     * com.example 패키지의 모든 public 메서드를 span으로 추적
+     * (observability 패키지는 제외하여 무한 루프 방지)
+     */
+    @Around("applicationPackage() && publicMethod() && excludeObservabilityPackage()")
     fun traceMethod(joinPoint: ProceedingJoinPoint): Any? {
         val signature = joinPoint.signature as MethodSignature
         val className = signature.declaringType.simpleName
