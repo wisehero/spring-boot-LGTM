@@ -99,7 +99,17 @@ services:
       - LOKI_URL=http://loki:3100
       - APP_NAME=sample-app
       - ENV=docker
-      - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://tempo:4318/v1/traces
+      # OpenTelemetry Java Agent Configuration
+      - OTEL_SERVICE_NAME=sample-app
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      # 내부 메서드 추적은 AOP로 처리 (TracingAspect.kt 참조)
+      # 추가 자동 계측 활성화
+      - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
+      - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s

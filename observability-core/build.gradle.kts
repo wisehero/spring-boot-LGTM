@@ -13,15 +13,17 @@ dependencyManagement {
 }
 
 dependencies {
-    api(libs.bundles.observability)
+    // Java Agent 방식: Agent가 trace 전송 처리
+    api(libs.bundles.observability.agent)
     implementation(libs.spring.boot.starter)
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+
+    // OTel API - Agent가 런타임에 구현체 제공
+    implementation("io.opentelemetry:opentelemetry-api:1.45.0")
 
     // For Servlet Filter
     compileOnly("jakarta.servlet:jakarta.servlet-api")
-
-    // OpenTelemetry SDK autoconfigure for ResourceProvider
-    implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi")
 }
 
 java {

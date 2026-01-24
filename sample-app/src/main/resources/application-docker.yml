@@ -2,12 +2,18 @@ spring:
   application:
     name: sample-app
 
-management:
-  otlp:
-    tracing:
-      endpoint: http://tempo:4318/v1/traces
+# Tracing is handled by OpenTelemetry Java Agent (not Spring Boot auto-config)
+# See docker-compose.yml for OTEL_* environment variables
+
+# AOP 기반 내부 메서드 자동 추적 활성화
+observability:
+  tracing:
+    aop:
+      enabled: true
 
 logging:
   level:
     root: INFO
     com.example: DEBUG
+    # OTel Agent debug logging (optional)
+    io.opentelemetry: INFO
