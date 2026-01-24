@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: sample-app
+
+management:
+  otlp:
+    tracing:
+      endpoint: http://tempo:4318/v1/traces
+
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG

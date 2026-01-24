@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<included>
+    <!--
+    Micrometer Tracing auto-populates MDC with traceId and spanId.
+    Reference: https://micrometer.io/docs/tracing#_baggage
+    -->
+
+    <property name="TRACE_PATTERN" value="%X{traceId:-},%X{spanId:-}"/>
+    <property name="LOG_PATTERN" value="%d{ISO8601} [%thread] %-5level %logger{36} - [${TRACE_PATTERN}] %msg%n"/>
+
+    <!-- Console Appender -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Loki4j Appender with trace correlation -->
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+            <url>${LOKI_URL:-http://localhost:3100}/loki/api/v1/push</url>
+        </http>
+        <format>
+            <label>
+                <pattern>app=${APP_NAME:-unknown},env=${ENV:-local},level=%level</pattern>
+            </label>
+            <message>
+                <!-- Include traceId in structured format for Grafana derived fields -->
+                <pattern>traceId=%X{traceId:-none} spanId=%X{spanId:-none} | %d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            </message>
+        </format>
+        <batchMaxItems>100</batchMaxItems>
+        <batchTimeoutMs>1000</batchTimeoutMs>
+    </appender>
+</included>

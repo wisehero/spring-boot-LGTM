@@ -1,0 +1,43 @@
+[versions]
+spring-boot = "3.4.1"
+kotlin = "1.9.22"
+micrometer = "1.14.2"
+micrometer-tracing = "1.4.1"
+opentelemetry = "1.45.0"
+opentelemetry-instrumentation = "2.12.0"
+loki4j = "1.5.2"
+
+[libraries]
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-aop = { module = "org.springframework.boot:spring-boot-starter-aop" }
+spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+micrometer-core = { module = "io.micrometer:micrometer-core", version.ref = "micrometer" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
+micrometer-tracing = { module = "io.micrometer:micrometer-tracing", version.ref = "micrometer-tracing" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel", version.ref = "micrometer-tracing" }
+
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
+
+loki-logback-appender = { module = "com.github.loki4j:loki-logback-appender", version.ref = "loki4j" }
+
+[bundles]
+observability = [
+    "spring-boot-starter-actuator",
+    "spring-boot-starter-aop",
+    "micrometer-core",
+    "micrometer-registry-prometheus",
+    "micrometer-tracing",
+    "micrometer-tracing-bridge-otel",
+    "opentelemetry-exporter-otlp",
+    "loki-logback-appender"
+]
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
