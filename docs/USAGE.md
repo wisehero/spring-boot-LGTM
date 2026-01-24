@@ -1,263 +1,586 @@
-# Spring Boot LGTM Observability - Usage Guide
+# Spring Boot LGTM Observability - 사용 가이드
 
-This guide covers how to use the `observability-core` module in your Spring Boot applications, configure it for different environments, create custom metrics and traces, and customize Grafana dashboards.
+마지막 업데이트: 2026-01-25
 
-## Table of Contents
+이 가이드는 `observability-core` 모듈을 기존 Spring Boot 프로젝트에 적용하는 방법을 설명합니다. **OpenTelemetry Java Agent**와 **AOP 기반 자동 추적**을 중심으로 작성되었습니다.
 
-1. [Adding observability-core to Existing Projects](#adding-observability-core-to-existing-projects)
-2. [Configuration Options](#configuration-options)
-3. [Custom Metrics](#custom-metrics)
-4. [Custom Traces](#custom-traces)
-5. [Logging Integration](#logging-integration)
-6. [Grafana Dashboard Customization](#grafana-dashboard-customization)
-7. [Environment-Specific Configuration](#environment-specific-configuration)
-8. [Production Considerations](#production-considerations)
-9. [Debugging and Observability Validation](#debugging-and-observability-validation)
+## 목차
 
-## Adding observability-core to Existing Projects
+1. [개요 및 버전 정보](#개요-및-버전-정보)
+2. [프로젝트에 적용하기](#프로젝트에-적용하기)
+3. [Java Agent 환경변수 상세 설명](#java-agent-환경변수-상세-설명)
+4. [AOP 기반 자동 추적 설정](#aop-기반-자동-추적-설정)
+5. [JDBC 쿼리 추적](#jdbc-쿼리-추적)
+6. [커스텀 메트릭](#커스텀-메트릭)
+7. [커스텀 트레이스](#커스텀-트레이스)
+8. [로그-트레이스 연동](#로그-트레이스-연동)
+9. [Grafana 활용](#grafana-활용)
+10. [환경별 설정](#환경별-설정)
+11. [프로덕션 고려사항](#프로덕션-고려사항)
+12. [트러블슈팅](#트러블슈팅)
+13. [참고 자료](#참고-자료)
 
-### Step 1: Add Dependency
+---
 
-In your project's `build.gradle.kts`, add the observability-core dependency:
+## 개요 및 버전 정보
+
+이 프로젝트는 **OpenTelemetry Java Agent** 방식의 자동 계측을 사용합니다. 기존의 라이브러리 방식과 달리, 애플리케이션 코드 변경 없이 JVM 수준에서 자동으로 HTTP, JDBC, 메시지 큐 등을 추적합니다.
+
+추가로 **Spring AOP**를 이용한 내부 메서드 자동 추적(TracingAspect)으로, Service/Repository 계층의 모든 public 메서드를 자동으로 span으로 생성합니다.
+
+### 사용 중인 버전 (2026-01-25 기준)
+
+| 컴포넌트 | 버전 |
+|---------|-----|
+| Spring Boot | 3.4.1 |
+| Kotlin | 1.9.22 |
+| OpenTelemetry Java Agent | 2.11.0 |
+| OpenTelemetry Instrumentation Annotations | 2.12.0 |
+| Micrometer | 1.14.2 |
+| Micrometer Tracing | 1.4.1 |
+| Loki4j | 1.5.2 |
+| Grafana | 11.4.0 |
+| Prometheus | 2.55.1 |
+| Loki | 3.3.2 |
+| Tempo | 2.6.1 |
+| PostgreSQL | 16 |
+
+---
+
+## 프로젝트에 적용하기
+
+### Step 1: 의존성 추가
+
+프로젝트의 `build.gradle.kts`에 `observability-core` 의존성을 추가합니다.
 
 ```kotlin
 dependencies {
-    // Option A: Local module (during development)
+    // 옵션 A: 로컬 모듈 (개발 중)
     implementation(project(":observability-core"))
 
-    // Option B: Published library (when released to Maven Central)
+    // 옵션 B: Maven Central 배포 라이브러리 (향후)
     // implementation("com.example:observability-core:0.0.1-SNAPSHOT")
 }
 ```
 
-### Step 2: Enable Spring Boot Auto-Configuration
+또는 `libs.versions.toml`에서 정의된 번들을 사용할 수 있습니다:
 
-The observability module uses Spring Boot's auto-configuration mechanism. No additional configuration is needed - just having the dependency on the classpath automatically enables:
-
-- OTLP trace exporter configuration
-- Micrometer metrics setup
-- Logback Loki4j appender
-- Request logging filter
-
-Verify auto-configuration is loaded by running with debug output:
-
-```bash
-./gradlew bootRun --args='--debug' 2>&1 | grep -i observability
+```kotlin
+dependencies {
+    implementation(libs.bundles.observabilityAgent)
+}
 ```
 
-You should see output like:
-```
-ObservabilityAutoConfiguration matched (condition)
-TracingConfiguration matched (condition)
-MetricsConfiguration matched (condition)
-LoggingConfiguration matched (condition)
+**주의**: `opentelemetry-exporter-otlp` 의존성은 포함하지 않습니다. Java Agent가 자체 exporter를 제공하므로 포함하면 중복 전송이 발생합니다.
+
+### Step 2: Dockerfile에 Java Agent 추가
+
+Docker 이미지에 OpenTelemetry Java Agent를 다운로드하고 실행 시 로드합니다.
+
+```dockerfile
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# 헬스 체크용 curl 설치
+RUN apk add --no-cache curl
+
+# OpenTelemetry Java Agent 다운로드
+ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.11.0/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
+
+# 빌드된 JAR 파일 복사
+COPY your-app/build/libs/your-app-*.jar app.jar
+
+# Java 옵션 설정
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# 포트 노출
+EXPOSE 8080
+
+# 헬스 체크
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# Java Agent와 함께 실행
+ENTRYPOINT ["sh", "-c", "java -javaagent:/app/opentelemetry-javaagent.jar $JAVA_OPTS -jar app.jar"]
 ```
 
-### Step 3: Add Minimal Configuration
+**핵심 포인트**:
+- `-javaagent:/app/opentelemetry-javaagent.jar` 플래그로 Java Agent 활성화
+- JAR 파일 경로: `/app/opentelemetry-javaagent.jar`
+- 환경변수를 통해 Agent 동작 제어
 
-In your `application.yml`, add:
+### Step 3: docker-compose.yml 환경변수 설정
+
+`docker-compose.yml`에서 애플리케이션 서비스에 OpenTelemetry 환경변수를 설정합니다.
+
+```yaml
+services:
+  your-app:
+    build:
+      context: ../
+      dockerfile: your-app/Dockerfile
+    container_name: your-app
+    ports:
+      - "8080:8080"
+    environment:
+      # 기본 Spring Boot 설정
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_APPLICATION_NAME=your-app
+
+      # OpenTelemetry Java Agent 설정
+      - OTEL_SERVICE_NAME=your-app
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none          # Prometheus가 메트릭 담당
+      - OTEL_LOGS_EXPORTER=none             # Loki가 로그 담당
+
+      # 자동 계측 활성화
+      - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
+      - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+      - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+      - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+
+      # Loki 설정
+      - LOKI_URL=http://loki:3100
+      - APP_NAME=your-app
+      - ENV=docker
+
+      # 데이터베이스 설정 (PostgreSQL 예시)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydb
+      - SPRING_DATASOURCE_USERNAME=app
+      - SPRING_DATASOURCE_PASSWORD=app
+
+    depends_on:
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+```
+
+### Step 4: application.yml 설정
+
+프로젝트의 `src/main/resources/application.yml`에 기본 설정을 추가합니다.
 
 ```yaml
 spring:
   application:
-    name: my-service
+    name: your-app
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+# AOP 기반 내부 메서드 자동 추적 활성화
+observability:
+  tracing:
+    aop:
+      enabled: true
 
 management:
-  # Required: Enable observability endpoints
   endpoints:
     web:
       exposure:
         include: health,info,prometheus,metrics
 
-  # Configure tracing
-  tracing:
-    sampling:
-      probability: 1.0  # 100% for development
+  # 메트릭 태그 설정
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
-  # Point to Tempo
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
-
-# Include traceId in logs
+  # 로깅 설정
 logging:
+  level:
+    root: INFO
+    com.example: DEBUG
+    io.opentelemetry: INFO
   pattern:
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+    level: "%5p [${spring.application.name:},%X{trace_id:-},%X{span_id:-}]"
 ```
 
-### Step 4: Configure Logback
+**docker 프로필용 설정** (`application-docker.yml`):
 
-Create or update `logback-spring.xml`:
+```yaml
+spring:
+  application:
+    name: your-app
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Docker 환경에서는 자동 생성
+
+# AOP 기반 추적 활성화
+observability:
+  tracing:
+    aop:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG
+```
+
+### Step 5: logback-spring.xml 설정
+
+로깅 설정 파일을 생성하거나 업데이트합니다.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Include observability-core logback configuration -->
+    <!-- observability-core의 로깅 설정 포함 -->
     <include resource="logback-spring-observability.xml"/>
 
-    <!-- Add console appender for local development -->
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
+    <!-- 환경 변수 설정 -->
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="your-app"/>
+    <springProperty scope="context" name="ENV" source="spring.profiles.active" defaultValue="local"/>
+    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://localhost:3100"/>
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="LOKI"/>  <!-- From observability-core -->
-    </root>
+    <!-- 로컬 프로파일: 콘솔만 사용 -->
+    <springProfile name="!docker">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
 
-    <logger name="com.mycompany" level="DEBUG"/>
+    <!-- Docker 프로파일: 콘솔 + Loki -->
+    <springProfile name="docker">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+        </root>
+    </springProfile>
 </configuration>
 ```
 
-### Step 5: Verify Integration
+**주의**: `logback-spring-observability.xml`은 `observability-core` 모듈에 포함되어 있으며, Java Agent가 MDC에 `trace_id`와 `span_id`를 **snake_case** 형식으로 자동 추가합니다.
 
-```bash
-# Start your application
-./gradlew bootRun
+---
 
-# In another terminal, check if metrics are exposed
-curl http://localhost:8080/actuator/prometheus | head -20
+## Java Agent 환경변수 상세 설명
+
+OpenTelemetry Java Agent는 환경변수를 통해 동작을 제어합니다. 각 변수의 역할을 설명합니다.
+
+### 필수 설정
+
+#### OTEL_SERVICE_NAME
+- **설명**: OpenTelemetry에서 인식하는 애플리케이션 이름
+- **값**: `your-app`
+- **영향**: Tempo에서 service 필터, Grafana 대시보드에 표시
+- **예시**:
+  ```bash
+  OTEL_SERVICE_NAME=payment-service
+  ```
+
+#### OTEL_EXPORTER_OTLP_ENDPOINT
+- **설명**: Trace 데이터를 보낼 OTLP 수신자 주소
+- **값**: `http://tempo:4318` (Docker) 또는 `http://localhost:4318` (로컬)
+- **형식**: `http://{host}:{port}` (TLS는 https 사용)
+- **예시**:
+  ```bash
+  # 로컬 개발
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+
+  # Docker Compose
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+
+  # Kubernetes
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo.observability.svc.cluster.local:4318
+  ```
+
+#### OTEL_EXPORTER_OTLP_PROTOCOL
+- **설명**: OTLP 프로토콜 선택
+- **값**: `http/protobuf` (권장) 또는 `grpc`
+- **추천**: `http/protobuf`는 HTTP/1.1 기반으로 더 안정적
+- **예시**:
+  ```bash
+  OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+  ```
+
+#### OTEL_TRACES_EXPORTER
+- **설명**: Trace 데이터 내보내기 활성화
+- **값**: `otlp`
+- **예시**:
+  ```bash
+  OTEL_TRACES_EXPORTER=otlp
+  ```
+
+### 선택 설정
+
+#### OTEL_METRICS_EXPORTER
+- **설명**: Metric 데이터 내보내기 제어
+- **값**: `none` (Prometheus가 대신 처리)
+- **이유**: Micrometer를 통해 Prometheus가 메트릭 수집
+- **예시**:
+  ```bash
+  OTEL_METRICS_EXPORTER=none
+  ```
+
+#### OTEL_LOGS_EXPORTER
+- **설명**: Log 데이터 내보내기 제어
+- **값**: `none` (Loki4j가 대신 처리)
+- **이유**: Logback Appender (Loki4j)가 로그 전송
+- **예시**:
+  ```bash
+  OTEL_LOGS_EXPORTER=none
+  ```
+
+#### OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED
+- **설명**: Spring Web MVC 자동 계측 활성화
+- **값**: `true` (기본값)
+- **효과**: HTTP 요청/응답 자동 추적
+- **예시**:
+  ```bash
+  OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
+  ```
+
+#### OTEL_INSTRUMENTATION_JDBC_ENABLED
+- **설명**: JDBC 쿼리 자동 계측 활성화
+- **값**: `true` (기본값)
+- **효과**: SQL 쿼리 span 자동 생성
+- **예시**:
+  ```bash
+  OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+  ```
+
+#### OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE
+- **설명**: Logback MDC에 trace_id, span_id 자동 추가
+- **값**: `true`
+- **효과**: 모든 로그에 `trace_id`, `span_id` 포함
+- **주의**: `true`로 설정하지 않으면 로그-트레이스 연동 불가
+- **예시**:
+  ```bash
+  OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+  ```
+
+#### OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED
+- **설명**: Java Agent 글로벌 자동 설정 활성화
+- **값**: `true` (권장)
+- **효과**: 환경변수 기반 자동 설정 적용
+- **예시**:
+  ```bash
+  OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+  ```
+
+### 고급 설정
+
+#### OTEL_EXPORTER_OTLP_TIMEOUT
+- **설명**: OTLP 내보내기 타임아웃
+- **값**: `10s` (기본값)
+- **권장**:
+  - 로컬/내부 네트워크: `10s`
+  - 외부 네트워크: `30s`
+  - 매우 빠른 응답 필요: `5s`
+- **예시**:
+  ```bash
+  OTEL_EXPORTER_OTLP_TIMEOUT=30s
+  ```
+
+#### OTEL_EXPORTER_OTLP_HEADERS
+- **설명**: OTLP 요청에 추가할 HTTP 헤더
+- **값**: `key1=value1,key2=value2` 형식
+- **사용 사례**: 인증 토큰, API 키
+- **예시**:
+  ```bash
+  OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer+token123,X-API-Key=secret
+  ```
+
+#### OTEL_TRACES_SAMPLER
+- **설명**: 샘플링 전략
+- **값**: `always_on`, `always_off`, `traceidratio`, `parentbased_*`
+- **기본값**: `parentbased_always_on`
+- **예시**:
+  ```bash
+  # 1% 샘플링
+  OTEL_TRACES_SAMPLER=traceidratio
+  OTEL_TRACES_SAMPLER_ARG=0.01
+  ```
+
+#### OTEL_RESOURCE_ATTRIBUTES
+- **설명**: 리소스 속성 (모든 span에 추가)
+- **값**: `key1=value1,key2=value2` 형식
+- **예시**:
+  ```bash
+  OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production,service.version=1.2.3
+  ```
+
+---
+
+## AOP 기반 자동 추적 설정
+
+Spring AOP를 이용한 자동 추적은 Service, Repository 등의 모든 public 메서드를 자동으로 span으로 변환합니다.
+
+### TracingAspect 동작 원리
+
+```
+요청
+ ↓
+[Java Agent] HTTP 요청 자동 추적 (루트 span 생성)
+ ↓
+[TracingAspect] Service.getUser() 호출 감지
+ ↓
+span 자동 생성: "ServiceName.methodName"
+ ↓
+[TracingAspect] Service.processData() 호출 감지
+ ↓
+span 자동 생성: "ServiceName.methodName" (자식 span)
+ ↓
+[Java Agent] JDBC 쿼리 자동 추적
+ ↓
+[결과] Tempo에 전체 span 트리 전송
 ```
 
-Expected output shows JVM metrics:
-```
-# HELP jvm_memory_usage_bytes
-# TYPE jvm_memory_usage_bytes gauge
-jvm_memory_usage_bytes{area="heap",id="G1 Heap"} ...
-```
+### 활성화 방법
 
-## Configuration Options
-
-### Tracing Configuration
-
-#### Sampling Strategy
-
-Control how many traces are sent to Tempo:
+`application.yml`에서 `observability.tracing.aop.enabled=true`로 설정합니다.
 
 ```yaml
-management:
+observability:
   tracing:
-    sampling:
-      probability: 0.1  # 10% sampling
-      # probability: 0.5  # 50% sampling
-      # probability: 1.0  # 100% sampling (dev only)
+    aop:
+      enabled: true
 ```
 
-**Recommendations by Environment**:
-- **Development**: `1.0` (100%) - see all traces
-- **Staging**: `0.1` (10%) - balance detail and cost
-- **Production**: `0.01` (1%) - minimize performance impact and cost
-
-#### OTLP Exporter Configuration
+**프로파일별 설정**:
 
 ```yaml
-management:
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
-      timeout: 10s           # Default: 10s
-      compression: gzip      # Default: gzip (optional: none)
+# application-dev.yml
+observability:
+  tracing:
+    aop:
+      enabled: true
+
+# application-prod.yml
+observability:
+  tracing:
+    aop:
+      enabled: true  # 프로덕션에서도 활성화하되, 샘플링으로 부하 제어
 ```
 
-**Timeout Considerations**:
-- Default `10s` is usually sufficient for local/internal networks
-- Increase to `30s` for high-latency or congested networks
-- Decrease to `5s` for latency-sensitive applications
+### 추적 대상 커스터마이징
 
-### Metrics Configuration
+현재 `TracingAspect`는 다음을 자동 추적합니다:
 
-#### Add Application Tags
+- `com.example` 패키지 하위의 모든 public 메서드
+- `@Service`, `@Repository`, `@Component` 등 모든 Spring Bean
 
-Tags help identify metrics across environments:
+**제외할 패키지**:
+- `com.example.observability` (무한 루프 방지)
+
+**커스터마이징 예시** (TracingAspect.kt 수정):
+
+```kotlin
+// 특정 패키지만 추적하려면
+@Pointcut("within(com.example.service..*) || within(com.example.repository..*)")
+fun applicationPackage() {}
+
+// 특정 어노테이션만 추적하려면
+@Pointcut("@within(org.springframework.stereotype.Service)")
+fun serviceLayer() {}
+```
+
+### 비활성화 방법
+
+특정 환경에서 AOP 추적을 끄려면:
 
 ```yaml
-management:
-  metrics:
-    tags:
-      application: ${spring.application.name}
-      environment: ${ENV:local}
-      version: ${app.version}
-      region: ${APP_REGION:us-east-1}
+observability:
+  tracing:
+    aop:
+      enabled: false
 ```
 
-These tags appear in all metrics:
-```
-http_server_requests_seconds_count{application="my-service",environment="prod",...}
-```
-
-#### Disable Specific Metrics
-
-Reduce overhead by excluding unnecessary metrics:
-
-```yaml
-management:
-  metrics:
-    enable:
-      jvm: true         # Keep JVM metrics
-      process: true     # Keep process metrics
-      logback: false    # Disable logging metrics (if not needed)
-      tomcat: true      # Keep Tomcat metrics
-```
-
-### Logging Configuration
-
-#### Log Pattern with TraceId
-
-The logging pattern includes traceId automatically via Micrometer:
-
-```yaml
-logging:
-  pattern:
-    # Micrometer auto-populates %X{traceId} and %X{spanId} in MDC
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
-    # Output: INFO [my-service,4bf92f3577b649a2b123456789abcdef,5af7183fb1d3cc01]
-```
-
-#### Log Levels
-
-```yaml
-logging:
-  level:
-    root: WARN              # Keep noise down
-    com.example: DEBUG      # Your package in debug
-    org.springframework: WARN
-    io.micrometer: INFO     # Metrics framework
-```
-
-#### Loki4j Configuration (Advanced)
-
-The observability module configures Loki4j automatically, but you can override settings via environment variables:
+또는 환경변수:
 
 ```bash
-# Environment variables (set in docker-compose or shell)
-LOKI_URL=http://loki:3100
-APP_NAME=my-service
-ENV=production
+OBSERVABILITY_TRACING_AOP_ENABLED=false
 ```
 
-These are injected into the Loki4j appender configuration:
+### 결과 확인 (Tempo에서)
 
-```xml
-<!-- In logback-spring-observability.xml -->
-<appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
-    <http>
-        <url>${LOKI_URL:-http://localhost:3100}/loki/api/v1/push</url>
-    </http>
-    <format>
-        <label>
-            <pattern>app=${APP_NAME:-unknown},env=${ENV:-local},level=%level</pattern>
-        </label>
-    </format>
-</appender>
+AOP 추적이 활성화되면 Tempo에서 다음과 같은 span 구조를 볼 수 있습니다:
+
+```
+GET /api/users                             450ms (Agent: HTTP)
+├─ UserService.getAllUsers                 120ms (AOP)
+│  ├─ UserRepository.findAll                80ms (AOP)
+│  │  └─ SELECT * FROM users               75ms (Agent: JDBC)
+│  └─ UserService.enrichUsers              35ms (AOP)
+└─ UserService.formatResponse               15ms (AOP)
 ```
 
-## Custom Metrics
+---
 
-### 1. Counter Metrics
+## JDBC 쿼리 추적
 
-Count occurrences of events:
+OpenTelemetry Java Agent는 JDBC 쿼리를 자동으로 추적하고, 각 쿼리를 별도의 span으로 생성합니다.
+
+### 활성화
+
+docker-compose.yml에서 다음을 설정합니다:
+
+```yaml
+environment:
+  - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+```
+
+### 자동 추적 대상
+
+- **Driver**: JDBC 호환 모든 드라이버 (PostgreSQL, MySQL, Oracle 등)
+- **작업**: SELECT, INSERT, UPDATE, DELETE, CREATE TABLE 등
+- **정보**: 쿼리 문자열, 실행 시간, 성공/실패 상태
+
+### 추적 결과
+
+Tempo에서 쿼리 span은 다음과 같이 표시됩니다:
+
+```
+Database Query                              75ms
+├─ db.system: postgresql
+├─ db.name: mydb
+├─ db.user: app
+├─ db.statement: SELECT * FROM users WHERE id = ?
+└─ duration: 75ms
+```
+
+### PostgreSQL 예시
+
+```yaml
+# docker-compose.yml
+postgres:
+  image: postgres:16-alpine
+  environment:
+    POSTGRES_USER: app
+    POSTGRES_PASSWORD: app
+    POSTGRES_DB: mydb
+
+sample-app:
+  environment:
+    - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydb
+    - SPRING_DATASOURCE_USERNAME=app
+    - SPRING_DATASOURCE_PASSWORD=app
+    - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+```
+
+### Grafana에서 SQL 쿼리 분석
+
+Tempo에서 트레이스를 열면 각 JDBC span에서 쿼리를 확인할 수 있습니다:
+
+```
+Details 탭 → db.statement 필드 → 전체 SQL 확인
+```
+
+---
+
+## 커스텀 메트릭
+
+Micrometer를 통해 비즈니스 메트릭을 수집하고 Prometheus에 내보냅니다.
+
+### 1. Counter (카운터)
+
+이벤트 발생 횟수를 기록합니다.
 
 ```kotlin
 import io.micrometer.core.instrument.MeterRegistry
@@ -267,9 +590,9 @@ import org.springframework.stereotype.Service
 class OrderService(private val meterRegistry: MeterRegistry) {
 
     fun placeOrder(order: Order) {
-        // ... business logic ...
+        // ... 비즈니스 로직 ...
 
-        // Increment counter
+        // 카운터 증가
         meterRegistry.counter(
             "orders.placed",
             "status", order.status,
@@ -286,14 +609,16 @@ class OrderService(private val meterRegistry: MeterRegistry) {
 }
 ```
 
-**Grafana Query**:
-```
+**Prometheus 쿼리**:
+```promql
 rate(orders_placed_total[5m])
 ```
 
-### 2. Gauge Metrics
+**Grafana 대시보드**: 시계열 그래프로 시간대별 주문 수 표시
 
-Measure current value (e.g., queue depth):
+### 2. Gauge (게이지)
+
+현재 값을 측정합니다 (예: 큐 크기, 활성 연결).
 
 ```kotlin
 @Service
@@ -301,8 +626,9 @@ class QueueService(private val meterRegistry: MeterRegistry) {
 
     private val queue = ConcurrentLinkedQueue<Task>()
 
+    @PostConstruct
     fun init() {
-        // Register gauge that measures queue size
+        // 큐 크기를 게이지로 등록
         meterRegistry.gauge(
             "queue.size",
             queue,
@@ -312,24 +638,21 @@ class QueueService(private val meterRegistry: MeterRegistry) {
 
     fun addTask(task: Task) {
         queue.add(task)
-        // Gauge automatically updated
+        // 게이지가 자동으로 업데이트됨
     }
 }
 ```
 
-**Grafana Query**:
-```
+**Prometheus 쿼리**:
+```promql
 queue_size
 ```
 
-### 3. Timer Metrics
+### 3. Timer (타이머)
 
-Measure execution time:
+작업 실행 시간을 측정합니다.
 
 ```kotlin
-import io.micrometer.core.instrument.Timer
-import org.springframework.stereotype.Service
-
 @Service
 class ReportService(private val meterRegistry: MeterRegistry) {
 
@@ -338,41 +661,22 @@ class ReportService(private val meterRegistry: MeterRegistry) {
             "report.generation.duration",
             "type", type
         ).recordCallable {
-            // Business logic here
-            Thread.sleep(1000)  // Simulated work
-            Report(...)
+            // 비즈니스 로직
+            val result = computeReport(type)
+            result
         }
     }
 }
 ```
 
-**Grafana Query - P95 Latency**:
-```
+**Prometheus 쿼리 (P95 지연시간)**:
+```promql
 histogram_quantile(0.95, rate(report_generation_duration_seconds_bucket[5m]))
 ```
 
-### 4. Distribution Summary
+### 4. @Timed 어노테이션
 
-Measure distribution of values:
-
-```kotlin
-@Service
-class PaymentService(private val meterRegistry: MeterRegistry) {
-
-    fun processPayment(amount: BigDecimal) {
-        meterRegistry.timer(
-            "payment.amount",
-            "currency", "USD"
-        ).record(amount.toLong()) { value ->
-            // Process payment
-        }
-    }
-}
-```
-
-### Custom Metrics via Annotation
-
-Spring provides `@Timed` for method-level metrics:
+메서드 수준에서 자동으로 메트릭을 수집합니다.
 
 ```kotlin
 import io.micrometer.core.annotation.Timed
@@ -381,18 +685,23 @@ import org.springframework.stereotype.Service
 @Service
 class UserService {
 
-    @Timed(value = "user.fetch", description = "Time to fetch user")
+    @Timed(value = "user.fetch", description = "사용자 조회 시간")
     fun fetchUser(userId: String): User {
-        // Logic here
+        // 자동으로 메트릭 수집
+        return userRepository.findById(userId)
     }
 }
 ```
 
-## Custom Traces
+---
 
-### 1. @Observed Annotation
+## 커스텀 트레이스
 
-The easiest way to create spans - fully automatic trace propagation:
+span을 수동으로 생성하거나, @Observed 어노테이션으로 자동 생성할 수 있습니다.
+
+### 1. @Observed 어노테이션 (권장)
+
+가장 간단한 방법으로, 자동으로 span을 생성하고 속성을 추가합니다.
 
 ```kotlin
 import io.micrometer.observation.annotation.Observed
@@ -403,12 +712,12 @@ class OrderProcessingService {
 
     @Observed(
         name = "order.processing",
-        contextualName = "process-order"  // Shows in Tempo
+        contextualName = "process-order"
     )
     fun processOrder(order: Order): ProcessResult {
-        // Automatically creates span
-        // Logs within this method include traceId
-        // Duration automatically recorded as metric
+        // 자동으로 span 생성
+        // 실행 시간 자동 기록
+        // 로그에 traceId 자동 추가
 
         val validation = validateOrder(order)
         val payment = capturePayment(order)
@@ -417,26 +726,28 @@ class OrderProcessingService {
 
     @Observed(contextualName = "validate-order")
     private fun validateOrder(order: Order): ValidationResult {
-        // Child span automatically created
+        // 자식 span 자동 생성
+        return ValidationResult(...)
     }
 
     @Observed(contextualName = "capture-payment")
     private fun capturePayment(order: Order): PaymentResult {
-        // Another child span
+        // 또 다른 자식 span
+        return PaymentResult(...)
     }
 }
 ```
 
-**In Grafana Tempo**, you'll see:
+**Tempo에서 결과**:
 ```
-process-order
-├── validate-order
-└── capture-payment
+process-order (300ms)
+├─ validate-order (50ms)
+└─ capture-payment (200ms)
 ```
 
-### 2. Manual Span Creation
+### 2. 수동 Span 생성
 
-For more control, use Tracer directly:
+더 세밀한 제어가 필요한 경우, Tracer를 직접 사용합니다.
 
 ```kotlin
 import io.micrometer.tracing.Tracer
@@ -446,10 +757,12 @@ import org.springframework.stereotype.Service
 class DataProcessingService(private val tracer: Tracer) {
 
     fun processLargeDataset() {
+        // 현재 span에 태그 추가
         tracer.currentSpan()?.tag("dataset.size", "1000000")
 
-        for (batch in batches) {
-            val span = tracer.nextSpan().name("process-batch")
+        for ((batchIndex, batch) in batches.withIndex()) {
+            // 새로운 span 생성
+            val span = tracer.nextSpan().name("process-batch-$batchIndex")
             try {
                 span.start().use {
                     processBatch(batch)
@@ -462,9 +775,9 @@ class DataProcessingService(private val tracer: Tracer) {
 }
 ```
 
-### 3. Span Tags and Events
+### 3. Span 태그와 이벤트
 
-Add metadata to spans:
+span에 메타데이터를 추가합니다.
 
 ```kotlin
 import io.micrometer.observation.Observation
@@ -482,7 +795,7 @@ class TransactionService(private val tracer: Tracer) {
         observation.observe {
             val span = tracer.currentSpan()
 
-            // Add tags
+            // 태그 추가 (검색 가능)
             span?.tag("transaction.id", transId)
             span?.tag("transaction.amount", amount.toString())
             span?.tag("transaction.currency", "USD")
@@ -500,582 +813,482 @@ class TransactionService(private val tracer: Tracer) {
 }
 ```
 
-**In Tempo**, you can search by tags:
+**Tempo에서 검색**:
 - `transaction.status=success`
 - `transaction.amount=100.00`
 
-### 4. Baggage (Cross-Boundary Context)
+---
 
-Propagate context across service boundaries:
+## 로그-트레이스 연동
 
-```kotlin
-import io.micrometer.tracing.Baggage
-import org.springframework.stereotype.Service
+OpenTelemetry Java Agent는 자동으로 `trace_id`와 `span_id`를 Logback의 MDC에 추가하므로, 모든 로그에 traceId가 포함됩니다.
 
-@Service
-class AuthService(private val tracer: Tracer) {
+### 자동 추가 (Agent가 처리)
 
-    fun authenticateRequest(token: String): User {
-        val user = validateToken(token)
+docker-compose.yml에서 다음을 설정하면:
 
-        // Set baggage - automatically propagated to all spans
-        tracer.createBaggageInCurrentContext("user.id", user.id)
-        tracer.createBaggageInCurrentContext("user.role", user.role)
-
-        return user
-    }
-}
-
-@Service
-class DataService(private val tracer: Tracer) {
-
-    fun fetchData(): Data {
-        // Baggage automatically available
-        val userId = Baggage.fromCurrentContext().get("user.id")
-        val userRole = Baggage.fromCurrentContext().get("user.role")
-
-        // These values appear in logs for this span automatically
-        return fetchDataForUser(userId)
-    }
-}
+```yaml
+environment:
+  - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
 ```
 
-## Logging Integration
+그러면 모든 로그에 **자동으로** `trace_id`와 `span_id`가 추가됩니다.
 
-### Automatic TraceId in Logs
+### 로그 패턴 설정
 
-Micrometer Tracing automatically adds traceId and spanId to Logback's MDC (Mapped Diagnostic Context):
-
-```kotlin
-@RestController
-class ExampleController {
-
-    private val log = LoggerFactory.getLogger(ExampleController::class.java)
-
-    @GetMapping("/example")
-    fun example() {
-        // traceId is AUTOMATICALLY in MDC, no manual work needed
-        log.info("Processing request")  // traceId included automatically
-
-        // Access MDC directly (optional)
-        val traceId = MDC.get("traceId")
-        val spanId = MDC.get("spanId")
-    }
-}
-```
-
-### Structured Logging with JSON
-
-For better log parsing, use JSON format:
+`logback-spring-observability.xml`에서:
 
 ```xml
-<!-- In logback-spring.xml -->
-<dependency>
-    <groupId>com.fasterxml.jackson.core</groupId>
-    <artifactId>jackson-databind</artifactId>
-</dependency>
-```
+<!-- Java Agent는 snake_case 사용: trace_id, span_id -->
+<property name="TRACE_PATTERN" value="%X{trace_id:-},%X{span_id:-}"/>
+<property name="LOG_PATTERN" value="%d{ISO8601} [%thread] %-5level %logger{36} - [${TRACE_PATTERN}] %msg%n"/>
 
-```xml
-<appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-        <customFields>{"environment":"${ENV:-local}","application":"${APP_NAME:-unknown}"}</customFields>
+<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+        <pattern>${LOG_PATTERN}</pattern>
     </encoder>
 </appender>
 ```
 
-### Filtering Logs in Loki
-
-Query logs by traceId:
-
-```promql
-# Find all logs for a specific trace
-{app="my-service"} | json | traceId="4bf92f3577b649a2b123456789abcdef"
-
-# Find error logs with duration > 1s
-{level="ERROR"} | json | duration_ms > 1000
-
-# Find logs by service chain
-{app=~"my-service|payment-service"} | json | traceId=~".*"
-```
-
-## Grafana Dashboard Customization
-
-### Creating a Custom Dashboard
-
-1. **Open Grafana**: http://localhost:3000
-2. **Create Dashboard**: Dashboards → New Dashboard
-3. **Add Panel**: Add new panel → Select data source (Prometheus, Loki, or Tempo)
-
-### Example 1: Custom Metrics Panel
-
-Create a panel showing custom application metrics:
+### 로그 출력 예시
 
 ```
-Panel Title: Order Processing Latency (P95)
-
-Data Source: Prometheus
-Query: histogram_quantile(0.95, rate(order_processing_duration_seconds_bucket{job="spring-boot-app"}[5m]))
-
-Type: Time series
-Unit: Seconds
+2024-01-25 10:30:45.123 [http-nio-8080-exec-1] INFO com.example.service.OrderService - [b6c89963909788a33fddf391627d1808,6e1110d5294cbcd7] 주문 처리 시작
+2024-01-25 10:30:45.156 [http-nio-8080-exec-1] DEBUG com.example.repository.OrderRepository - [b6c89963909788a33fddf391627d1808,3f2e8c1a9d7f5b2c] 데이터베이스 쿼리 실행
 ```
 
-### Example 2: Log Pattern Panel
+### 로그에서 트레이스 조회
 
-Display application logs with errors highlighted:
+Loki 쿼리로 특정 traceId의 모든 로그를 조회합니다:
 
-```
-Panel Title: Application Error Logs
+```logql
+# 특정 traceId의 모든 로그
+{app="my-service"} | json | traceId="b6c89963909788a33fddf391627d1808"
 
-Data Source: Loki
-Query: {app="my-service",level="ERROR"} | json | __error__=""
+# ERROR 로그만 필터
+{level="ERROR"} | json | traceId="b6c89963909788a33fddf391627d1808"
 
-Type: Logs
-```
-
-### Example 3: Trace Analysis Panel
-
-Show trace distribution:
-
-```
-Panel Title: Trace Duration Distribution
-
-Data Source: Tempo
-Search Criteria:
-  - Service: my-service
-  - Duration: 100ms to 5000ms
-  - Status: OK
-
-Type: Statistics
+# 특정 서비스들의 로그
+{app=~"order-service|payment-service"} | json | traceId=~"b6c89963.*"
 ```
 
-### Example 4: Correlation Panel
+---
 
-Create a panel that jumps from metrics to traces:
+## Grafana 활용
 
+### 접속 정보
+
+| 서비스 | URL | 계정 |
+|--------|-----|------|
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | - |
+| Tempo | http://localhost:3200 | - |
+| Loki | http://localhost:3100 | - |
+
+### 대시보드 생성 (예시 1: 메트릭)
+
+**주문 처리 시간 (P95)**
+
+1. Grafana 접속 → Dashboard → New Panel
+2. Data Source: Prometheus
+3. 쿼리:
+   ```promql
+   histogram_quantile(0.95, rate(order_processing_duration_seconds_bucket[5m]))
+   ```
+4. Panel Type: Time series
+5. Unit: Seconds
+
+### 대시보드 생성 (예시 2: 로그)
+
+**애플리케이션 에러 로그**
+
+1. Data Source: Loki
+2. 쿼리:
+   ```logql
+   {app="my-service",level="ERROR"} | json
+   ```
+3. Panel Type: Logs
+
+### 대시보드 생성 (예시 3: 트레이스)
+
+**특정 트레이스 상세 보기**
+
+1. Tempo UI 접속 (http://localhost:3200)
+2. Search → Service 선택 → 추적 조건 입력
+3. 원하는 트레이스 클릭 → 전체 스팬 구조 확인
+
+### Loki에서 Tempo로 연결
+
+Loki 로그에서 traceId를 클릭하면 자동으로 Tempo의 해당 트레이스로 이동합니다.
+
+설정: docker/grafana/provisioning/datasources/datasources.yml 참조
+
+---
+
+## 환경별 설정
+
+### 개발 환경
+
+```yaml
+# application.yml
+observability:
+  tracing:
+    aop:
+      enabled: true
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0  # 100% 추적
+
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG
 ```
-Panel Title: Slow Transactions
 
-Data Source: Prometheus
-Query: order_processing_duration_seconds_bucket{job="spring-boot-app"}
+### 스테이징 환경
 
-Add override:
-  - Field: spanID (custom field)
-  - Provide links to Tempo traces
+```yaml
+# application-staging.yml
+observability:
+  tracing:
+    aop:
+      enabled: true
+
+management:
+  tracing:
+    sampling:
+      probability: 0.1  # 10% 샘플링
+
+logging:
+  level:
+    root: WARN
+    com.example: INFO
 ```
 
-### Importing Pre-built Dashboards
+### 프로덕션 환경
 
-Grafana has community dashboards you can import:
+```yaml
+# application-prod.yml
+observability:
+  tracing:
+    aop:
+      enabled: true  # 활성화하되 샘플링으로 제어
 
-1. Dashboards → Browse → Import
-2. Search "JVM" or "Micrometer"
-3. Select dashboard
-4. Choose data source
-5. Import
+management:
+  tracing:
+    sampling:
+      probability: 0.01  # 1% 샘플링
 
-### Dashboard JSON Examples
+logging:
+  level:
+    root: WARN
+    com.example: WARN
+    io.micrometer: WARN
+```
 
-Save custom dashboards as JSON for version control:
+### 프로파일 활성화
 
 ```bash
-# Export current dashboard
-curl -H "Authorization: Bearer $GRAFANA_API_KEY" \
-  http://localhost:3000/api/dashboards/uid/my-dashboard > my-dashboard.json
-
-# Import dashboard
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GRAFANA_API_KEY" \
-  -d @my-dashboard.json \
-  http://localhost:3000/api/dashboards/db
-```
-
-## Environment-Specific Configuration
-
-### Using Profiles
-
-Create separate configuration files for each environment:
-
-**application.yml** (default, local development):
-```yaml
-management:
-  tracing:
-    sampling:
-      probability: 1.0  # 100% in dev
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
-```
-
-**application-staging.yml**:
-```yaml
-management:
-  tracing:
-    sampling:
-      probability: 0.1  # 10% in staging
-  otlp:
-    tracing:
-      endpoint: http://tempo.staging.svc.cluster.local:4318/v1/traces
-```
-
-**application-prod.yml**:
-```yaml
-management:
-  tracing:
-    sampling:
-      probability: 0.01  # 1% in production
-  otlp:
-    tracing:
-      endpoint: http://tempo.prod.svc.cluster.local:4318/v1/traces
-```
-
-**Activate Profile**:
-```bash
-# Run with specific profile
+# 명령어
 ./gradlew bootRun --args='--spring.profiles.active=staging'
 
-# Or set environment variable
+# 환경변수
 export SPRING_PROFILES_ACTIVE=prod
 ./gradlew bootRun
+
+# Docker
+docker run -e SPRING_PROFILES_ACTIVE=prod your-app:latest
 ```
 
-### Docker Environment Variables
+---
 
-Override configuration via environment variables:
+## 프로덕션 고려사항
 
-```bash
-docker run \
-  -e SPRING_APPLICATION_NAME=my-service \
-  -e MANAGEMENT_OTLP_TRACING_ENDPOINT=http://tempo:4318/v1/traces \
-  -e MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.1 \
-  my-service:latest
-```
+### 1. 샘플링 전략
 
-### Using @ConditionalOnProperty
-
-Create environment-specific beans:
-
-```kotlin
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
-
-@Configuration
-class EnvironmentSpecificConfig {
-
-    @Bean
-    @ConditionalOnProperty(
-        name = "observability.enhanced",
-        havingValue = "true"
-    )
-    fun enhancedMetricsCollector(): EnhancedMetricsCollector {
-        return EnhancedMetricsCollector()  // Only in staging/prod
-    }
-
-    @Bean
-    @ConditionalOnProperty(
-        name = "observability.sampling.rate",
-        havingValue = "high"
-    )
-    fun highResolutionTracing(): TracingConfig {
-        return TracingConfig(probability = 1.0)  // Development only
-    }
-}
-```
-
-## Production Considerations
-
-### 1. Trace Sampling Strategy
-
-**The Problem**: 100% tracing in production generates massive overhead and cost.
-
-**Solution**: Implement adaptive sampling:
+프로덕션에서는 100% 추적이 성능을 저하시키고 비용을 증가시킵니다.
 
 ```yaml
 management:
   tracing:
     sampling:
-      probability: 0.01  # Start at 1%
+      probability: 0.01  # 1%에서 시작
 ```
 
-**Advanced: Probabilistic Sampling by Error Status**:
+**권장 샘플링 비율**:
+- 개발: 1.0 (100%)
+- 스테이징: 0.1 (10%)
+- 프로덕션: 0.01 ~ 0.001 (1% ~ 0.1%)
 
-Create a custom sampler (requires extending Spring Boot):
-
-```kotlin
-import io.micrometer.tracing.SampledTraceContext
-import io.micrometer.tracing.TraceContext
-import org.springframework.boot.actuate.autoconfigure.tracing.TracingProperties
-
-@Configuration
-class ProductionTracingConfig(
-    private val tracingProperties: TracingProperties
-) {
-
-    @Bean
-    fun customSampler(): Sampler = Sampler { samplingRequest ->
-        // 100% sample errors, 1% sample success
-        if (samplingRequest.spanName.contains("error")) {
-            Decision.RECORD_ONLY  // 100% for errors
-        } else {
-            Decision.drop()  // 1% for normal (via parent config)
-        }
-    }
-}
-```
-
-### 2. Log Volume Management
-
-**Reduce logs in production**:
+### 2. 로그 볼륨 관리
 
 ```yaml
 logging:
   level:
-    root: WARN              # Only warnings and errors
-    com.example: INFO       # Application logs only
+    root: WARN              # 경고 이상만
+    com.example: INFO       # 애플리케이션 INFO만
     org.springframework: WARN
     io.micrometer: WARN
 ```
 
-**Batch logs for efficiency**:
+### 3. Loki4j 배치 설정
 
 ```xml
-<!-- In logback-spring.xml -->
-<appender name="LOKI_BATCH" class="com.github.loki4j.logback.Loki4jAppender">
+<!-- logback-spring.xml -->
+<appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
     <http>
         <url>${LOKI_URL}/loki/api/v1/push</url>
-        <batchMaxSize>500</batchMaxSize>  <!-- Batch 500 logs -->
-        <batchTimeoutMs>5000</batchTimeoutMs>  <!-- Or 5 seconds -->
+        <batchMaxItems>500</batchMaxItems>  <!-- 500개 로그마다 전송 -->
+        <batchTimeoutMs>5000</batchTimeoutMs>  <!-- 또는 5초마다 -->
     </http>
 </appender>
 ```
 
-### 3. Resource Limits
+### 4. 리소스 제한 설정
 
-**Set memory limits for LGTM stack**:
+docker-compose.yml에서:
 
 ```yaml
-# docker-compose.yml
-services:
-  prometheus:
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
+prometheus:
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+      reservations:
+        memory: 512M
 
-  loki:
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
+loki:
+  deploy:
+    resources:
+      limits:
+        memory: 512M
 
-  tempo:
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
+tempo:
+  deploy:
+    resources:
+      limits:
+        memory: 2G
 ```
 
-### 4. Metrics Retention
-
-**Configure Prometheus data retention**:
+### 5. 데이터 보존 정책
 
 ```yaml
-# docker-compose.yml
+# docker-compose.yml - prometheus
 prometheus:
   command:
-    - '--storage.tsdb.retention.time=30d'  # Keep 30 days of metrics
-    - '--storage.tsdb.retention.size=50GB'  # Or cap at 50GB
+    - '--storage.tsdb.retention.time=30d'
+    - '--storage.tsdb.retention.size=50GB'
 ```
 
-**Configure Loki log retention**:
+### 6. 보안
 
 ```yaml
-# loki-config.yml
-table_manager:
-  retention_deletes_enabled: true
-  retention_period: 720h  # 30 days
-```
-
-### 5. High Availability Setup
-
-**For production**, use multiple replicas:
-
-```yaml
-# docker-compose.yml
-services:
-  prometheus-1:
-    # Primary Prometheus
-
-  prometheus-2:
-    # Secondary/replica for redundancy
-
-  loki-1:
-    # Primary Loki with distributed backend
-
-  loki-2:
-    # Secondary replica
-```
-
-### 6. Security Considerations
-
-**Restrict Grafana access**:
-
-```yaml
-# grafana.ini in docker-compose
+# grafana.ini
 [security]
-admin_user = admin
-admin_password = ${GRAFANA_PASSWORD}  # Strong password!
+admin_password = ${GRAFANA_PASSWORD}  # 강력한 비밀번호
 allow_sign_up = false
-
-[auth]
-disable_login_form = false
 
 [auth.anonymous]
 enabled = false
 ```
 
-**Secure OTLP endpoint** (if exposed):
+---
 
-```yaml
-# Use authentication or VPN
-management:
-  otlp:
-    tracing:
-      endpoint: https://tempo.prod.internal:4318/v1/traces
-      headers:
-        Authorization: "Bearer ${OTLP_TOKEN}"
-```
+## 트러블슈팅
 
-## Debugging and Observability Validation
+### 문제 1: Trace가 Tempo에 나타나지 않음
 
-### 1. Verify Auto-Configuration
+**증상**: 요청을 보냈지만 Tempo에서 trace를 찾을 수 없음
 
-Check which auto-configurations were loaded:
+**해결 방법**:
 
-```bash
-./gradlew bootRun --args='--debug' 2>&1 | grep -A 1 "Matched"
-```
+1. Java Agent 활성화 확인:
+   ```bash
+   docker logs your-app | grep -i "opentelemetry"
+   ```
 
-Look for:
-```
-ObservabilityAutoConfiguration matched (Autoconfig)
-TracingConfiguration matched (condition)
-MetricsConfiguration matched (condition)
-```
+2. 환경변수 확인:
+   ```bash
+   docker exec your-app env | grep OTEL
+   ```
 
-### 2. Check Exposed Endpoints
+   예상 출력:
+   ```
+   OTEL_SERVICE_NAME=your-app
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+   OTEL_TRACES_EXPORTER=otlp
+   ```
 
-Verify all observability endpoints are available:
+3. Tempo 연결 확인:
+   ```bash
+   docker exec your-app curl -v http://tempo:4318/v1/traces
+   ```
 
-```bash
-# List all actuator endpoints
-curl http://localhost:8080/actuator | jq '.links[] | .href'
+4. 샘플링 비율 확인 (매우 낮으면 trace가 드물 수 있음):
+   ```yaml
+   management:
+     tracing:
+       sampling:
+         probability: 1.0  # 테스트 중에는 100%로 설정
+   ```
 
-# Expected endpoints
-# /actuator/health
-# /actuator/metrics
-# /actuator/prometheus
-# /actuator/tracing
-```
+### 문제 2: 로그에 traceId가 없음
 
-### 3. Verify TraceId in Logs
+**증상**: 로그에 trace_id와 span_id가 표시되지 않음
 
-Make a request and check if traceId appears:
+**해결 방법**:
 
-```bash
-# Generate a trace
-curl http://localhost:8080/api/chain
+1. 환경변수 확인:
+   ```bash
+   OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+   ```
 
-# Check application logs (if running locally)
-./gradlew bootRun 2>&1 | grep -i traceid
-```
+2. Logback 패턴 확인 (snake_case 사용):
+   ```xml
+   <!-- logback-spring-observability.xml -->
+   <pattern>... %X{trace_id} %X{span_id} ...</pattern>
+   ```
 
-Expected output:
-```
-INFO [sample-app,4bf92f3577b649a2b123456789abcdef,5af7183fb1d3cc01] ...
-```
+   **주의**: Micrometer는 camelCase (`traceId`)를 사용하지만, Agent는 snake_case (`trace_id`)를 사용합니다.
 
-### 4. Verify Traces in Tempo
+3. 콘솔 출력으로 확인:
+   ```bash
+   curl http://localhost:8080/api/test
+   docker logs your-app | tail -20
+   ```
 
-```bash
-# Generate a trace
-curl http://localhost:8080/api/slow
+### 문제 3: AOP Span이 생성되지 않음
 
-# Query Tempo API
-curl 'http://localhost:3200/api/traces' \
-  -H 'Accept: application/json' | jq .
+**증상**: Service/Repository 메서드가 span으로 추적되지 않음
 
-# Or search by trace ID
-curl 'http://localhost:3200/api/traces/{traceId}' \
-  -H 'Accept: application/json' | jq .
-```
+**해결 방법**:
 
-### 5. Verify Metrics Export
+1. AOP 활성화 확인:
+   ```yaml
+   observability:
+     tracing:
+       aop:
+         enabled: true
+   ```
 
-```bash
-# Check Prometheus metrics
-curl http://localhost:8080/actuator/prometheus | grep -E "^(http_|jvm_)"
+2. 클래스가 Spring Bean인지 확인:
+   ```kotlin
+   @Service  // 또는 @Repository, @Component
+   class MyService {
+       fun myMethod() { }
+   }
+   ```
 
-# Expected metrics
-# http_server_requests_seconds_bucket
-# jvm_memory_used_bytes
-# jvm_gc_pause_seconds
-```
+3. public 메서드인지 확인:
+   ```kotlin
+   @Service
+   class MyService {
+       fun publicMethod() { }  // public (암묵적)
+       private fun privateMethod() { }  // private는 추적 안 됨
+   }
+   ```
 
-### 6. Check Integration Tests
+4. 패키지 위치 확인:
+   - `com.example` 패키지 내에 있어야 함
+   - `com.example.observability` 패키지는 제외됨
 
-Run the provided integration tests:
+### 문제 4: JDBC 쿼리 span이 없음
 
-```bash
-./gradlew test
+**증상**: SQL 쿼리가 별도의 span으로 생성되지 않음
 
-# Specific test
-./gradlew :sample-app:test --tests '*SampleControllerTest*'
-```
+**해결 방법**:
 
-Expected output:
-```
-SampleControllerTest
-  ✓ GET api hello returns 200
-  ✓ GET api chain returns 200
-  ✓ actuator metrics endpoint is accessible
-  ✓ actuator health endpoint returns UP
-```
+1. 환경변수 확인:
+   ```bash
+   OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+   ```
 
-### 7. Enable Debug Logging for Observability Components
+2. JDBC Driver가 호환되는지 확인:
+   - PostgreSQL: 지원
+   - MySQL: 지원
+   - Oracle: 지원
 
-Increase logging for troubleshooting:
+3. 실제 쿼리가 실행되는지 확인:
+   ```bash
+   curl http://localhost:8080/api/query-data
+   docker logs postgres
+   ```
 
-```yaml
-logging:
-  level:
-    io.micrometer: DEBUG
-    com.github.loki4j: DEBUG
-    io.opentelemetry: DEBUG
-```
+### 문제 5: Prometheus에 메트릭이 없음
 
-### 8. Performance Profiling
+**증상**: /actuator/prometheus 엔드포인트가 있지만 메트릭이 없음
 
-Check observability overhead:
+**해결 방법**:
 
-```bash
-# Before observability-core
-./gradlew :sample-app:bootRun &
-# Test performance with: ab -c 10 -n 1000 http://localhost:8080/api/hello
+1. 엔드포인트 활성화 확인:
+   ```yaml
+   management:
+     endpoints:
+       web:
+         exposure:
+           include: health,info,prometheus,metrics
+   ```
 
-# After observability-core
-# Compare results - overhead should be < 5%
-```
+2. 메트릭 수집 확인:
+   ```bash
+   curl http://localhost:8080/actuator/prometheus | head -50
+   ```
+
+3. Prometheus 스크래핑 확인:
+   ```bash
+   curl http://localhost:9090/api/v1/targets
+   ```
+
+### 문제 6: 높은 CPU 또는 메모리 사용
+
+**증상**: 100% 샘플링으로 인한 성능 저하
+
+**해결 방법**:
+
+1. 샘플링 비율 감소:
+   ```yaml
+   management:
+     tracing:
+       sampling:
+         probability: 0.1  # 또는 더 낮게
+   ```
+
+2. 로깅 레벨 상향:
+   ```yaml
+   logging:
+     level:
+       root: WARN
+       io.micrometer: WARN
+   ```
+
+3. AOP 비활성화 (필요시):
+   ```yaml
+   observability:
+     tracing:
+       aop:
+         enabled: false
+   ```
 
 ---
 
-This comprehensive guide covers everything needed to integrate, configure, and operate the Spring Boot LGTM observability stack in both development and production environments.
+## 참고 자료
+
+### 공식 문서
+- [OpenTelemetry Java Agent](https://opentelemetry.io/docs/zero-code/java/agent/)
+- [Spring Boot Actuator](https://spring.io/guides/gs/actuator-service/)
+- [Micrometer Documentation](https://micrometer.io/)
+- [Grafana LGTM Stack](https://grafana.com/docs/lgtm/)
+
+### 프로젝트 문서
+- [ARCHITECTURE.md](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/docs/ARCHITECTURE.md) - 아키텍처 상세
+- [Dockerfile](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/sample-app/Dockerfile) - Docker 설정 예시
+- [docker-compose.yml](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/docker/docker-compose.yml) - 전체 스택 설정
+
+### 버전 관리
+- [gradle/libs.versions.toml](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/gradle/libs.versions.toml) - 모든 의존성 버전
+
+### 샘플 애플리케이션
+- [observability-core](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/observability-core/) - 재사용 가능한 모듈
+- [sample-app](/Users/wisehero/Documents/GitHub/spring-boot-LGTM/sample-app/) - 완전한 구현 예시
