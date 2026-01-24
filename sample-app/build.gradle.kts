@@ -9,6 +9,11 @@ dependencies {
     implementation(project(":observability-core"))
     implementation(libs.spring.boot.starter.web)
 
+    // JPA + PostgreSQL
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    runtimeOnly("org.postgresql:postgresql")
+
     testImplementation(libs.spring.boot.starter.test)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

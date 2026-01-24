@@ -86,6 +86,25 @@ services:
     networks:
       - lgtm
 
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=sampledb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d sampledb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lgtm
+
   # 샘플 애플리케이션
   sample-app:
     build:
@@ -113,6 +132,10 @@ services:
       # MDC에 trace_id, span_id 자동 주입 (로그 연동)
       - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
       - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+      # PostgreSQL 연결 설정
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/sampledb
+      - SPRING_DATASOURCE_USERNAME=app
+      - SPRING_DATASOURCE_PASSWORD=app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -125,6 +148,8 @@ services:
       loki:
         condition: service_healthy
       tempo:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - lgtm

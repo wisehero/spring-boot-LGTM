@@ -1,6 +1,13 @@
 spring:
   application:
     name: sample-app
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
 
 # 추적은 OpenTelemetry Java Agent가 처리합니다 (Spring Boot 자동 구성 아님)
 # OTEL_* 환경 변수는 docker-compose.yml을 참조하세요
