@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <included>
     <!--
-    Micrometer Tracing auto-populates MDC with traceId and spanId.
-    Reference: https://micrometer.io/docs/tracing#_baggage
+    OTel Java Agent auto-populates MDC with trace_id and span_id (snake_case).
+    Reference: https://opentelemetry.io/docs/zero-code/java/agent/
     -->
 
-    <property name="TRACE_PATTERN" value="%X{traceId:-},%X{spanId:-}"/>
+    <!-- Java Agent uses snake_case: trace_id, span_id -->
+    <property name="TRACE_PATTERN" value="%X{trace_id:-},%X{span_id:-}"/>
     <property name="LOG_PATTERN" value="%d{ISO8601} [%thread] %-5level %logger{36} - [${TRACE_PATTERN}] %msg%n"/>
 
     <!-- Console Appender -->
@@ -25,8 +26,8 @@
                 <pattern>app=${APP_NAME:-unknown},env=${ENV:-local},level=%level</pattern>
             </label>
             <message>
-                <!-- Include traceId in structured format for Grafana derived fields -->
-                <pattern>traceId=%X{traceId:-none} spanId=%X{spanId:-none} | %d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
+                <!-- Java Agent uses trace_id (snake_case) -->
+                <pattern>traceId=%X{trace_id:-none} spanId=%X{span_id:-none} | %d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
             </message>
         </format>
         <batchMaxItems>100</batchMaxItems>

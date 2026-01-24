@@ -110,6 +110,9 @@ services:
       # 추가 자동 계측 활성화
       - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
       - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+      # MDC에 trace_id, span_id 자동 주입 (로그 연동)
+      - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+      - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
