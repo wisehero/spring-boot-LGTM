@@ -111,7 +111,8 @@
         }
       ],
       "title": "HTTP Request Rate",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "## HTTP 요청률 (Request Rate)\n\n**측정 대상:** 초당 HTTP 요청 수를 메서드, URI, 상태 코드별로 측정합니다.\n\n**중요성:** 애플리케이션의 트래픽 패턴을 파악하고 용량 계획 수립에 활용됩니다. 실시간 부하 상태를 모니터링하여 스케일링 시점을 판단할 수 있습니다.\n\n**해석 방법:**\n- **급증:** 트래픽 스파이크, 마케팅 이벤트, 또는 DDoS 공격 가능성\n- **급감:** 서비스 장애, 네트워크 문제, 또는 업스트림 장애 가능성\n- **비정상적인 패턴:** 특정 엔드포인트에 집중된 요청은 봇 활동이나 오용 가능성"
     },
     {
       "datasource": {
@@ -220,7 +221,8 @@
         }
       ],
       "title": "HTTP Request Duration (p50, p95, p99)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "## HTTP 요청 응답 시간 (Latency Percentiles)\n\n**측정 대상:** HTTP 요청의 응답 시간을 백분위수(p50, p95, p99)로 측정합니다.\n\n**중요성:** 사용자 경험을 직접적으로 나타내는 지표입니다. p95와 p99는 대부분의 사용자가 경험하는 최악의 응답 시간을 보여줍니다.\n\n**해석 방법:**\n- **p50 (중앙값):** 전체 요청의 50%가 이 시간 이내에 완료됩니다.\n- **p95:** 95%의 요청이 이 시간 이내에 완료됩니다. SLA 목표 설정에 주로 사용됩니다.\n- **p99:** 99%의 요청이 이 시간 이내에 완료됩니다. 극단적인 경우를 감지합니다.\n- **p50과 p99의 큰 차이:** 일부 요청이 매우 느리게 처리되고 있음을 의미하며, DB 쿼리 최적화나 캐싱 전략 검토가 필요할 수 있습니다."
     },
     {
       "datasource": {
@@ -320,7 +322,8 @@
         }
       ],
       "title": "HTTP Error Rate",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "## HTTP 에러율 (Error Rate)\n\n**측정 대상:** 전체 요청 중 4xx 및 5xx 에러의 비율을 측정합니다.\n\n**중요성:** 애플리케이션의 안정성과 신뢰성을 나타내는 핵심 지표입니다. 에러율 증가는 서비스 품질 저하를 의미합니다.\n\n**해석 방법:**\n- **4xx 에러 (클라이언트 에러):**\n  - 증가 시: 잘못된 API 사용, 인증/인가 문제, 존재하지 않는 리소스 요청 등\n  - 주로 클라이언트 측 문제이나, API 문서 불명확성이나 validation 로직 문제일 수 있음\n- **5xx 에러 (서버 에러):**\n  - 증가 시: 애플리케이션 버그, DB 연결 실패, 외부 서비스 장애, 메모리 부족 등\n  - 즉시 조사가 필요한 심각한 문제\n- **정상 범위:** 일반적으로 5xx 에러율은 0.1% 미만이 이상적입니다."
     },
     {
       "datasource": {
@@ -405,8 +408,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "tomcat_threads_busy_threads",
-          "legendFormat": "Busy Threads",
+          "expr": "jvm_threads_states_threads{state=\"runnable\"}",
+          "legendFormat": "Runnable Threads",
           "refId": "A"
         },
         {
@@ -414,13 +417,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "tomcat_threads_current_threads",
-          "legendFormat": "Current Threads",
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "Live Threads",
           "refId": "B"
         }
       ],
-      "title": "Tomcat Active Threads",
-      "type": "timeseries"
+      "title": "JVM Active Threads",
+      "type": "timeseries",
+      "description": "## JVM 활성 스레드 (Active Threads)\n\n**측정 대상:** JVM에서 실행 중인 라이브 스레드와 실행 가능한(runnable) 스레드 수를 측정합니다.\n\n**중요성:** 애플리케이션의 동시성과 리소스 사용 패턴을 파악할 수 있습니다. 스레드 누수나 데드락을 조기에 발견할 수 있습니다.\n\n**해석 방법:**\n- **Live Threads (라이브 스레드):** 전체 살아있는 스레드 수\n- **Runnable Threads (실행 가능 스레드):** 실제로 작업을 수행 중이거나 대기 중인 스레드\n- **지속적인 증가:** 스레드 누수 가능성, 리소스가 제대로 해제되지 않음\n- **급격한 증가:** 트래픽 스파이크 또는 블로킹 작업으로 인한 스레드 대기\n- **높은 수치 유지:** 스레드 풀 크기 재조정이나 비동기 처리 방식 검토 필요"
     },
     {
       "datasource": {
@@ -484,7 +488,8 @@
         }
       ],
       "title": "Total Request Rate",
-      "type": "gauge"
+      "type": "gauge",
+      "description": "## 전체 요청률 (Total Request Rate)\n\n**측정 대상:** 모든 엔드포인트의 초당 총 요청 수를 게이지로 표시합니다.\n\n**중요성:** 현재 애플리케이션의 전체 부하 상태를 한눈에 파악할 수 있는 지표입니다.\n\n**해석 방법:**\n- **녹색 (0-100 req/s):** 정상 범위\n- **노란색 (100-500 req/s):** 주의 필요, 모니터링 강화\n- **빨간색 (500+ req/s):** 높은 부하 상태, 스케일링 검토 필요\n- **임계값은 애플리케이션 특성에 따라 조정 필요**"
     },
     {
       "datasource": {
@@ -548,7 +553,8 @@
         }
       ],
       "title": "p99 Latency",
-      "type": "gauge"
+      "type": "gauge",
+      "description": "## p99 응답 지연 시간 (p99 Latency)\n\n**측정 대상:** 전체 요청의 99%가 완료되는 시간을 측정합니다.\n\n**중요성:** 최악의 사용자 경험을 나타내는 지표로, SLA(Service Level Agreement) 준수 여부를 확인할 수 있습니다.\n\n**해석 방법:**\n- **녹색 (0-0.5초):** 우수한 응답 속도\n- **노란색 (0.5-1초):** 허용 가능하나 최적화 검토 필요\n- **빨간색 (1초 이상):** 사용자 경험 저하, 즉시 개선 필요\n- **높은 값:** DB 쿼리 최적화, 캐싱 전략, 외부 API 호출 최적화 등을 검토해야 함"
     },
     {
       "datasource": {
@@ -618,7 +624,8 @@
         }
       ],
       "title": "Error Rate (5xx)",
-      "type": "gauge"
+      "type": "gauge",
+      "description": "## 서버 에러율 (5xx Error Rate)\n\n**측정 대상:** 전체 요청 중 5xx 서버 에러의 비율을 백분율로 표시합니다.\n\n**중요성:** 서버 측 문제를 즉시 감지할 수 있는 가장 중요한 지표 중 하나입니다. 높은 에러율은 서비스 장애를 의미합니다.\n\n**해석 방법:**\n- **녹색 (0%):** 에러 없음, 정상 운영\n- **빨간색 (0.01% 이상):** 서버 에러 발생 중, 즉시 조사 필요\n- **가능한 원인:**\n  - 애플리케이션 코드 버그\n  - 데이터베이스 연결 실패\n  - 메모리 부족 (OOM)\n  - 외부 서비스 장애\n  - 잘못된 설정\n- **목표:** 5xx 에러율 0% 유지"
     },
     {
       "datasource": {
@@ -679,7 +686,8 @@
         }
       ],
       "title": "Application Status",
-      "type": "gauge"
+      "type": "gauge",
+      "description": "## 애플리케이션 상태 (Application Status)\n\n**측정 대상:** Spring Boot 애플리케이션의 가동 상태를 확인합니다.\n\n**중요성:** 애플리케이션이 정상적으로 실행되고 있는지 실시간으로 모니터링할 수 있습니다.\n\n**해석 방법:**\n- **1 (녹색):** 애플리케이션 정상 작동 중 (UP)\n- **0 (빨간색):** 애플리케이션 다운 또는 응답 없음 (DOWN)\n- **값이 0일 때:**\n  - 애플리케이션 크래시\n  - 컨테이너/서버 중단\n  - 네트워크 연결 문제\n  - Prometheus 스크래핑 실패\n- **즉시 알림이 필요한 중요 지표**"
     }
   ],
   "refresh": "10s",

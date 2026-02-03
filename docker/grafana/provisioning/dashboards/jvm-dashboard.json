@@ -87,6 +87,7 @@
         "y": 0
       },
       "id": 1,
+      "description": "## 힙 메모리 사용량\n\n**측정 대상:** JVM 힙 메모리 사용량 (Used/Max)\n\n**중요성:** 메모리 누수 감지 및 GC 튜닝에 필수\n\n**해석:**\n- 80% 이상: GC 압박 증가, 튜닝 필요\n- 지속적 증가: 메모리 누수 의심\n- Used가 Max에 근접: OutOfMemoryError 위험",
       "options": {
         "legend": {
           "calcs": [],
@@ -187,6 +188,7 @@
         "y": 0
       },
       "id": 2,
+      "description": "## Non-Heap 메모리 사용량\n\n**측정 대상:** JVM Non-Heap 영역 (Metaspace, Code Cache 등)\n\n**중요성:** 클래스 로딩 및 JIT 컴파일 모니터링\n\n**해석:**\n- Metaspace 지속 증가: 클래스 로더 누수 의심\n- Code Cache 부족: JIT 컴파일 제한 발생\n- Max 값 확인으로 메타스페이스 한계 파악",
       "options": {
         "legend": {
           "calcs": [],
@@ -287,6 +289,7 @@
         "y": 8
       },
       "id": 3,
+      "description": "## GC 일시정지 시간 (비율)\n\n**측정 대상:** 5분간 GC로 인한 애플리케이션 일시정지 시간\n\n**중요성:** 사용자 경험에 직접 영향\n\n**해석:**\n- 높은 값: 애플리케이션 응답성 저하\n- Young GC vs Full GC 비교: Full GC 빈도 확인\n- mean/max 값으로 평균 및 최대 일시정지 파악\n- 목표: 일시정지 시간 최소화",
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -378,6 +381,7 @@
         "y": 8
       },
       "id": 4,
+      "description": "## JVM 스레드 개수\n\n**측정 대상:** 활성 스레드, 데몬 스레드, 최대 스레드 수\n\n**중요성:** 스레드 누수 및 동시성 문제 감지\n\n**해석:**\n- Live Threads 지속 증가: 스레드 누수 의심\n- Peak Threads: 최대 동시 스레드 수\n- Daemon vs Non-Daemon 비율로 백그라운드 작업 파악\n- 급격한 증가: 데드락 또는 블로킹 가능성",
       "options": {
         "legend": {
           "calcs": [],
@@ -487,6 +491,7 @@
         "y": 16
       },
       "id": 5,
+      "description": "## CPU 사용률\n\n**측정 대상:** 프로세스 및 시스템 전체 CPU 사용률\n\n**중요성:** 성능 병목 및 리소스 경합 파악\n\n**해석:**\n- Process CPU: JVM 애플리케이션의 CPU 사용률\n- System CPU: 전체 시스템 CPU 사용률\n- 높은 Process CPU: 애플리케이션 로직 최적화 필요\n- Process와 System 차이로 다른 프로세스 영향 파악",
       "options": {
         "legend": {
           "calcs": [],
@@ -557,6 +562,7 @@
         "y": 16
       },
       "id": 6,
+      "description": "## JVM 로드된 클래스 수\n\n**측정 대상:** 현재 JVM에 로드된 클래스 개수\n\n**중요성:** 메모리 사용 및 클래스 로더 동작 모니터링\n\n**해석:**\n- 지속적 증가: 클래스 로더 누수 또는 동적 클래스 로딩\n- 높은 값: Metaspace 메모리 압박 가능성\n- 급격한 변화: 애플리케이션 재배포 또는 클래스 언로딩",
       "options": {
         "orientation": "auto",
         "reduceOptions": {

@@ -1,0 +1,274 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (level) (count_over_time({app=\"sample-app\"}[1m]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Log Volume by Level",
+      "description": "## 로그 볼륨\n\n**측정 대상:** 분당 로그 발생 건수 (레벨별)\n\n**중요성:** 시스템 상태 및 이상 징후 파악\n\n**해석:**\n- ERROR 급증: 즉시 확인 필요\n- WARN 증가: 잠재적 문제 모니터링\n- INFO: 정상적인 애플리케이션 활동\n- DEBUG/TRACE: 개발 환경에서 상세 추적\n\n**사용법:** 그래프 클릭 시 해당 시점 로그로 이동",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"sample-app\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Log Stream",
+      "description": "## 실시간 로그 스트림\n\n**측정 대상:** 애플리케이션의 모든 로그 메시지 (실시간)\n\n**중요성:** 문제 발생 시 즉각적인 원인 파악\n\n**필터링 방법:**\n- `{app=\"sample-app\"} |= \"ERROR\"` - 에러만 조회\n- `{app=\"sample-app\"} | json | level=\"WARN\"` - WARN 레벨만\n- `{app=\"sample-app\"} |~ \"user.*login\"` - 정규식 패턴 매칭\n\n**상세 정보:**\n- 로그 항목 클릭 시 전체 컨텍스트 확인 가능\n- traceId가 포함된 경우 트레이스로 바로 이동\n\n**사용법:** 검색창에 필터 입력 후 실시간 모니터링",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "limit": 20,
+          "queryType": "traceqlSearch",
+          "refId": "A",
+          "filters": [
+            {
+              "id": "service-name",
+              "operator": "=",
+              "scope": "resource",
+              "tag": "service.name",
+              "value": ["sample-app"],
+              "valueType": "string"
+            }
+          ]
+        }
+      ],
+      "title": "Trace Search",
+      "description": "## 트레이스 검색\n\n**측정 대상:** 분산 시스템의 요청 흐름 (end-to-end)\n\n**중요성:** 마이크로서비스 간 호출 경로 및 성능 병목 지점 파악\n\n**필터링 방법:**\n- **서비스명:** `service.name=\"sample-app\"`\n- **지연시간:** duration > 1s (느린 요청만)\n- **상태:** status=error (실패한 요청만)\n- **속성:** `http.status_code=500`\n\n**분석 방법:**\n- Trace ID 클릭: 전체 스팬 계층 구조 확인\n- 각 스팬의 duration으로 병목 구간 식별\n- 태그/로그에서 상세 컨텍스트 확인\n\n**사용법:** 필터 추가 후 결과 목록에서 trace 선택",
+      "type": "traces"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 4,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View Trace",
+                    "url": "/explore?left=%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22query%22:%22${__value.raw}%22,%22queryType%22:%22traceql%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"sample-app\"} |= \"ERROR\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Logs with Trace Links",
+      "description": "## 에러 로그 & 트레이스 연동\n\n**측정 대상:** ERROR 레벨의 모든 로그 메시지\n\n**중요성:** 애플리케이션 오류의 즉각적인 감지 및 근본 원인 분석\n\n**traceId 활용법:**\n1. 에러 로그에서 traceId 필드 확인\n2. traceId 클릭 → Tempo로 자동 이동\n3. 전체 요청 흐름에서 에러 발생 지점 파악\n4. 관련 스팬의 태그/로그로 상세 컨텍스트 확인\n\n**에러 분석 절차:**\n- 에러 메시지에서 예외 타입 식별\n- 스택 트레이스로 코드 위치 파악\n- traceId로 요청 전체 흐름 추적\n- 관련 메트릭(CPU/메모리)과 상관관계 분석\n\n**사용법:** 에러 발생 시 이 패널에서 즉시 확인하고 traceId 링크로 deep dive",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "spring-boot",
+    "logs",
+    "traces",
+    "debugging"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Logs & Traces Explorer",
+  "uid": "logs-traces-explorer",
+  "version": 0,
+  "weekStart": ""
+}

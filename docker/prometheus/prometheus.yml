@@ -14,8 +14,9 @@ scrape_configs:
     scrape_interval: 5s
 
   # For local development (app running outside Docker)
-  - job_name: 'spring-boot-app-local'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
-    scrape_interval: 5s
+  # Uncomment when running app locally (outside Docker)
+  # - job_name: 'spring-boot-app-local'
+  #   metrics_path: '/actuator/prometheus'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8080']
+  #   scrape_interval: 5s
