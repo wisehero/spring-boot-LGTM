@@ -13,6 +13,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
+      - '--web.enable-remote-write-receiver'
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
@@ -95,9 +96,11 @@ services:
     environment:
       - POSTGRES_USER=app
       - POSTGRES_PASSWORD=app
-      - POSTGRES_DB=sampledb
+      - POSTGRES_DB=app
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d sampledb"]
+      test: ["CMD-SHELL", "pg_isready -U app"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,35 +108,120 @@ services:
     networks:
       - lgtm
 
-  # 샘플 애플리케이션
-  sample-app:
+  # 마이크로서비스
+  order-service:
     build:
       context: ../
-      dockerfile: sample-app/Dockerfile
-    container_name: sample-app
+      dockerfile: order-service/Dockerfile
+    container_name: order-service
     ports:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - LOKI_URL=http://loki:3100
-      - APP_NAME=sample-app
+      - APP_NAME=order-service
       - ENV=docker
-      # OpenTelemetry Java Agent 설정
-      - OTEL_SERVICE_NAME=sample-app
+      - OTEL_SERVICE_NAME=order-service
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
-      # 내부 메서드 추적은 AOP로 처리 (TracingAspect.kt 참조)
-      # 추가 자동 계측 활성화
       - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
       - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
-      # MDC에 trace_id, span_id 자동 주입 (로그 연동)
       - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
       - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
-      # PostgreSQL 연결 설정
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/sampledb
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/orderdb
+      - SPRING_DATASOURCE_USERNAME=app
+      - SPRING_DATASOURCE_PASSWORD=app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    networks:
+      - lgtm
+
+  product-service:
+    build:
+      context: ../
+      dockerfile: product-service/Dockerfile
+    container_name: product-service
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - LOKI_URL=http://loki:3100
+      - APP_NAME=product-service
+      - ENV=docker
+      - OTEL_SERVICE_NAME=product-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
+      - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+      - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+      - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/productdb
+      - SPRING_DATASOURCE_USERNAME=app
+      - SPRING_DATASOURCE_PASSWORD=app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - lgtm
+
+  payment-service:
+    build:
+      context: ../
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - LOKI_URL=http://loki:3100
+      - APP_NAME=payment-service
+      - ENV=docker
+      - OTEL_SERVICE_NAME=payment-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED=true
+      - OTEL_INSTRUMENTATION_JDBC_ENABLED=true
+      - OTEL_INSTRUMENTATION_LOGBACK_MDC_ADD_BAGGAGE=true
+      - OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/paymentdb
       - SPRING_DATASOURCE_USERNAME=app
       - SPRING_DATASOURCE_PASSWORD=app
     healthcheck:

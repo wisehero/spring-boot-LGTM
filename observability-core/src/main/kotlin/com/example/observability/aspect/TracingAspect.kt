@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["observability.tracing.aop.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = false
 )
 class TracingAspect {
 

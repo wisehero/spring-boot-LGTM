@@ -1,4 +1,6 @@
 rootProject.name = "spring-boot-lgtm"
 
 include("observability-core")
-include("sample-app")
+include("order-service")
+include("product-service")
+include("payment-service")

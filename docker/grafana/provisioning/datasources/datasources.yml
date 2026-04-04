@@ -37,7 +37,7 @@ datasources:
         filterByTraceID: true
         filterBySpanID: false
         customQuery: true
-        query: '{app="sample-app"} |= "${__span.traceId}"'
+        query: '{app=~"order-service|product-service|payment-service"} |= "${__span.traceId}"'
       nodeGraph:
         enabled: true
       serviceMap:

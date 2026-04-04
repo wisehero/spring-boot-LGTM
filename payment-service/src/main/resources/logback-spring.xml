@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="logback-spring-observability.xml"/>
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="payment-service"/>
+    <springProperty scope="context" name="ENV" source="spring.profiles.active" defaultValue="local"/>
+    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://localhost:3100"/>
+
+    <springProfile name="!docker">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="docker">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+        </root>
+    </springProfile>
+</configuration>
