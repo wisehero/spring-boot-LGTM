@@ -35,13 +35,13 @@ class RequestLoggingFilter : OncePerRequestFilter() {
 
         val startTime = System.currentTimeMillis()
 
-        log.info(">>> {} {} (MDC에 traceId 포함)", request.method, request.requestURI)
+        log.info(">>> 요청 수신: {} {} (traceId는 MDC에 자동 포함)", request.method, request.requestURI)
 
         try {
             filterChain.doFilter(request, response)
         } finally {
             val duration = System.currentTimeMillis() - startTime
-            log.info("<<< {} {} - status={} duration={}ms",
+            log.info("<<< 응답 완료: {} {} - status={} duration={}ms",
                 request.method, request.requestURI, response.status, duration)
         }
     }

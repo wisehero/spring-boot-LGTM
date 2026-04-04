@@ -17,7 +17,7 @@ class DataInitializer(
 
     override fun run(args: ApplicationArguments?) {
         if (productRepository.count() > 0) {
-            log.info("Products already initialized, skipping...")
+            log.info("상품 데이터가 이미 초기화됨, 건너뜀")
             return
         }
 
@@ -30,6 +30,6 @@ class DataInitializer(
         )
 
         productRepository.saveAll(products)
-        log.info("Initialized {} products", products.size)
+        log.info("상품 {}개 초기화 완료", products.size)
     }
 }

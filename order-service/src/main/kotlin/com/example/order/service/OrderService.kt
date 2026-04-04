@@ -20,16 +20,16 @@ class OrderService(
 
     @Transactional
     fun createOrder(request: CreateOrderRequest): OrderResponse {
-        log.info("Creating order for productId={}, quantity={}", request.productId, request.quantity)
+        log.info("주문 생성 시작: productId={}, quantity={}", request.productId, request.quantity)
 
         // 1. 상품 조회
         val product = getProduct(request.productId)
-        log.info("Product found: name={}, price={}", product.name, product.price)
+        log.info("상품 조회 완료: name={}, price={}", product.name, product.price)
 
         // 2. 재고 확인
         val stockResponse = checkStock(request.productId, request.quantity)
         if (!stockResponse.available) {
-            log.warn("Insufficient stock for productId={}, requested={}, current={}",
+            log.warn("재고 부족: productId={}, 요청수량={}, 현재재고={}",
                 request.productId, request.quantity, stockResponse.currentStock)
             throw InsufficientStockException(
                 "Insufficient stock for product ${product.name}. Requested: ${request.quantity}, Available: ${stockResponse.currentStock}"
@@ -46,7 +46,7 @@ class OrderService(
             status = OrderStatus.CREATED
         )
         val savedOrder = orderRepository.save(order)
-        log.info("Order created with id={}", savedOrder.id)
+        log.info("주문 생성 완료: id={}", savedOrder.id)
 
         // 4. 결제 요청
         val paymentResponse = processPayment(savedOrder.id, totalPrice)
@@ -56,18 +56,18 @@ class OrderService(
 
         if (paymentResponse.status == "APPROVED") {
             // 5-A. 결제 성공 → 재고 차감 + CONFIRMED
-            log.info("Payment approved for orderId={}, decreasing stock", savedOrder.id)
+            log.info("결제 승인됨: orderId={}, 재고 차감 진행", savedOrder.id)
             decreaseStock(request.productId, request.quantity)
             savedOrder.status = OrderStatus.CONFIRMED
         } else {
             // 5-B. 결제 실패 → PAYMENT_FAILED
-            log.warn("Payment rejected for orderId={}", savedOrder.id)
+            log.warn("결제 거부됨: orderId={}", savedOrder.id)
             savedOrder.status = OrderStatus.PAYMENT_FAILED
         }
 
         // 6. 주문 상태 업데이트
         val finalOrder = orderRepository.save(savedOrder)
-        log.info("Order finalized: id={}, status={}", finalOrder.id, finalOrder.status)
+        log.info("주문 확정: id={}, status={}", finalOrder.id, finalOrder.status)
 
         return OrderResponse(
             id = finalOrder.id,
@@ -81,7 +81,7 @@ class OrderService(
     }
 
     fun getOrder(id: Long): OrderResponse? {
-        log.info("Fetching order with id={}", id)
+        log.info("주문 조회: id={}", id)
         return orderRepository.findById(id).orElse(null)?.let {
             OrderResponse(
                 id = it.id,
@@ -96,7 +96,7 @@ class OrderService(
     }
 
     fun getAllOrders(): List<OrderResponse> {
-        log.info("Fetching all orders")
+        log.info("전체 주문 목록 조회")
         return orderRepository.findAll().map {
             OrderResponse(
                 id = it.id,
@@ -118,7 +118,7 @@ class OrderService(
                 .body(ProductDto::class.java)
                 ?: throw ProductNotFoundException("Product not found: $productId")
         } catch (e: RestClientException) {
-            log.error("Failed to fetch product {}: {}", productId, e.message)
+            log.error("상품 조회 실패: productId={}, 원인={}", productId, e.message)
             throw ProductNotFoundException("Product not found: $productId")
         }
     }
@@ -131,7 +131,7 @@ class OrderService(
                 .body(StockResponse::class.java)
                 ?: throw RuntimeException("Failed to check stock for product $productId")
         } catch (e: RestClientException) {
-            log.error("Failed to check stock for product {}: {}", productId, e.message)
+            log.error("재고 확인 실패: productId={}, 원인={}", productId, e.message)
             throw RuntimeException("Failed to check stock for product $productId", e)
         }
     }
@@ -146,7 +146,7 @@ class OrderService(
                 .body(PaymentDto::class.java)
                 ?: throw RuntimeException("Failed to process payment for order $orderId")
         } catch (e: RestClientException) {
-            log.error("Failed to process payment for order {}: {}", orderId, e.message)
+            log.error("결제 처리 실패: orderId={}, 원인={}", orderId, e.message)
             throw RuntimeException("Failed to process payment for order $orderId", e)
         }
     }
@@ -159,7 +159,7 @@ class OrderService(
                 .retrieve()
                 .toBodilessEntity()
         } catch (e: RestClientException) {
-            log.error("Failed to decrease stock for product {}: {}", productId, e.message)
+            log.error("재고 차감 실패: productId={}, 원인={}", productId, e.message)
             throw RuntimeException("Failed to decrease stock for product $productId", e)
         }
     }

@@ -16,20 +16,20 @@ class PaymentService(
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
 
     fun processPayment(request: PaymentRequest): PaymentResponse {
-        log.info("Processing payment for orderId={}, amount={}", request.orderId, request.amount)
+        log.info("결제 처리 시작: orderId={}, amount={}", request.orderId, request.amount)
 
         // 실제 결제 처리 시간 시뮬레이션 (100~500ms) - DB 트랜잭션 밖에서 수행
         val delay = (100L..500L).random()
-        log.debug("Simulating payment processing delay: {}ms", delay)
+        log.debug("결제 처리 지연 시뮬레이션: {}ms", delay)
         Thread.sleep(delay)
 
         // ~10% 확률로 결제 거부 (에러 시나리오 시연용)
         val isRejected = Math.random() < 0.1
         val status = if (isRejected) {
-            log.warn("Payment REJECTED for orderId={}", request.orderId)
+            log.warn("결제 거부됨: orderId={}", request.orderId)
             PaymentStatus.REJECTED
         } else {
-            log.info("Payment APPROVED for orderId={}", request.orderId)
+            log.info("결제 승인됨: orderId={}", request.orderId)
             PaymentStatus.APPROVED
         }
 
@@ -55,7 +55,7 @@ class PaymentService(
     }
 
     fun getPayment(id: Long): PaymentResponse? {
-        log.info("Fetching payment with id={}", id)
+        log.info("결제 조회: id={}", id)
         return paymentRepository.findById(id).orElse(null)?.let {
             PaymentResponse(
                 id = it.id,
