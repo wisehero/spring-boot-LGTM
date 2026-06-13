@@ -4,6 +4,10 @@
 
 LGTM 스택(**L**oki, **G**rafana, **T**empo, Prometheus **M**etrics)을 활용한 완전한 관측가능성을 제공합니다.
 
+> **이 브랜치**는 OTel Collector를 추가해 트레이스·로그를 **LGTM과 ClickHouse 양쪽으로 동시 전송(fan-out)**하고,
+> Grafana에서 두 백엔드(Tempo/Loki vs ClickHouse SQL)를 나란히 비교할 수 있도록 확장했습니다.
+> 애플리케이션 코드 변경 없이 agent의 OTLP 엔드포인트만 Collector로 바꾼 구성입니다.
+
 ## 주요 특징
 
 - 🔍 **Zero-Code Tracing** - OpenTelemetry Java Agent로 HTTP, JDBC, 메시지 큐 자동 계측
@@ -40,36 +44,33 @@ docker-compose ps
 | Prometheus | http://localhost:9090 | - |
 | Tempo | http://localhost:3200 | - |
 | Loki | http://localhost:3100 | - |
+| ClickHouse | http://localhost:8123 | default / (비밀번호 없음) |
+| OTel Collector (health) | http://localhost:13133 | - |
 
 ## 아키텍처
 
 ```mermaid
 flowchart TB
-    subgraph APP["🖥️ Spring Boot Application"]
-        subgraph AGENT["OpenTelemetry Java Agent"]
-            A1["HTTP 요청/응답 자동 추적"]
-            A2["JDBC 쿼리 자동 추적"]
-            A3["로그 MDC에 trace_id 주입"]
-        end
-        subgraph AOP["TracingAspect - AOP"]
-            B1["@Service/@Repository 메서드 span 생성"]
-        end
+    subgraph APP["🖥️ Spring Boot 서비스 ×3"]
+        AGENT["OpenTelemetry Java Agent<br/>HTTP·JDBC 자동계측 + AOP span"]
+        LOKI4J["Loki4j Appender"]
     end
 
-    APP -->|"Traces<br/>OTLP/HTTP"| TEMPO
-    APP -->|"Metrics<br/>Scrape"| PROM
-    APP -->|"Logs<br/>Loki4j"| LOKI
+    AGENT -->|"Traces + Logs<br/>OTLP/HTTP :4318"| COL["🛰️ OTel Collector<br/>:4317 / :4318"]
+    AGENT -->|"Metrics<br/>scrape /actuator/prometheus"| PROM["📊 Prometheus<br/>:9090"]
+    LOKI4J -->|"Logs<br/>push"| LOKI["📝 Loki<br/>:3100"]
 
-    TEMPO["🔍 Tempo<br/>:3200"]
-    PROM["📊 Prometheus<br/>:9090"]
-    LOKI["📝 Loki<br/>:3100"]
+    COL -->|"Traces"| TEMPO["🔍 Tempo<br/>:3200"]
+    COL -->|"Traces + Logs"| CH["🗄️ ClickHouse<br/>:8123 (SQL)"]
 
-    TEMPO --> GRAFANA
+    TEMPO --> GRAFANA["📈 Grafana<br/>:3000"]
     PROM --> GRAFANA
     LOKI --> GRAFANA
-
-    GRAFANA["📈 Grafana<br/>:3000"]
+    CH --> GRAFANA
 ```
+
+> 트레이스는 **Tempo와 ClickHouse 양쪽**으로, 로그는 **Loki(Loki4j 직결)와 ClickHouse(Collector 경유)** 양쪽으로 흐릅니다.
+> Grafana에서 동일 데이터를 두 백엔드로 비교할 수 있습니다.
 
 ## 트레이스 예시
 
@@ -108,8 +109,9 @@ spring-boot-LGTM/
 ├── order-service/               # 주문 (오케스트레이터: product·payment 호출 + 결제 보상)
 ├── product-service/             # 상품·재고 (낙관적 락)
 ├── payment-service/             # 결제 (시뮬레이션 + 보상 취소 API)
-├── docker/                      # LGTM 인프라 + 서비스 컨테이너
+├── docker/                      # LGTM + ClickHouse 인프라 + 서비스 컨테이너
 │   ├── docker-compose.yml       # 서비스 Dockerfile은 OTel Java Agent 포함
+│   ├── otel-collector/          # Collector 설정 (Tempo + ClickHouse fan-out)
 │   ├── prometheus/
 │   ├── loki/
 │   ├── tempo/
@@ -132,6 +134,8 @@ spring-boot-LGTM/
 | Prometheus | 2.55.1 | 메트릭 저장소 |
 | Loki | 3.3.2 | 로그 집계 |
 | Tempo | 2.6.1 | 분산 추적 |
+| OTel Collector (contrib) | 0.116.0 | OTLP 수신 → Tempo·ClickHouse fan-out |
+| ClickHouse | 24.8 | 트레이스·로그 통합 OLAP 저장소 (SQL) |
 
 ## 문서
 
@@ -140,6 +144,7 @@ spring-boot-LGTM/
 | **[설정 가이드](docs/SETUP_GUIDE.md)** | 자신의 프로젝트에 적용하는 10단계 가이드 |
 | [아키텍처](docs/ARCHITECTURE.md) | 시스템 구조 및 데이터 흐름 |
 | [사용 가이드](docs/USAGE.md) | 상세 사용법 및 커스터마이징 |
+| [ClickHouse 전환](docs/CLICKHOUSE.md) | ClickHouse 병렬 도입 배경·기대효과·트레이드오프 |
 
 ## 외부 참고 자료
 
@@ -153,4 +158,4 @@ MIT
 
 ---
 
-마지막 업데이트: 2026-01-25
+마지막 업데이트: 2026-06-13
