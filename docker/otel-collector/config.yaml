@@ -1,0 +1,61 @@
+# OpenTelemetry Collector (contrib) 설정
+# 서비스(OTel Java Agent)가 OTLP로 보낸 traces/logs를 받아
+# Tempo(기존 LGTM)와 ClickHouse(신규)로 동시에 fan-out 한다.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  # ClickHouse: traces + logs 컬럼형 저장 (SQL 조회). create_schema 가 otel_traces/otel_logs 자동 생성.
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s
+    database: otel
+    username: default
+    ttl: 72h
+    create_schema: true
+    logs_table_name: otel_logs
+    traces_table_name: otel_traces
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+  # Tempo: 기존 LGTM 트레이스 백엔드 유지 (내부 네트워크로 전달)
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo, clickhouse]   # LGTM(Tempo) + ClickHouse 동시 전송
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]                # 로그는 ClickHouse로 (Loki는 Loki4j 직결 유지)
+  telemetry:
+    logs:
+      level: info

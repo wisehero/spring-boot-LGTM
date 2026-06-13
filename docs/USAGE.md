@@ -697,41 +697,38 @@ class UserService {
 
 ## 커스텀 트레이스
 
-span을 수동으로 생성하거나, @Observed 어노테이션으로 자동 생성할 수 있습니다.
+`observability-core`의 `TracingAspect`가 `com.example..*`의 모든 public 메서드 span을 자동 생성하므로
+대부분은 추가 작업이 필요 없다. 더 세밀한 제어가 필요하면 아래 방법을 사용한다.
 
-### 1. @Observed 어노테이션 (권장)
+### 1. @WithSpan 어노테이션 (권장)
 
-가장 간단한 방법으로, 자동으로 span을 생성하고 속성을 추가합니다.
+OpenTelemetry Java Agent가 지원하는 어노테이션으로, 메서드에 붙이면 자동으로 span이 생성됩니다.
+`opentelemetry-instrumentation-annotations` 의존성이 필요하며 `observability-agent` 번들에 포함되어 있습니다.
 
 ```kotlin
-import io.micrometer.observation.annotation.Observed
+import io.opentelemetry.instrumentation.annotations.SpanAttribute
+import io.opentelemetry.instrumentation.annotations.WithSpan
 import org.springframework.stereotype.Service
 
 @Service
 class OrderProcessingService {
 
-    @Observed(
-        name = "order.processing",
-        contextualName = "process-order"
-    )
-    fun processOrder(order: Order): ProcessResult {
-        // 자동으로 span 생성
-        // 실행 시간 자동 기록
-        // 로그에 traceId 자동 추가
-
-        val validation = validateOrder(order)
-        val payment = capturePayment(order)
+    @WithSpan("process-order")
+    fun processOrder(@SpanAttribute("order.id") orderId: Long): ProcessResult {
+        // 자동으로 span 생성, 실행 시간 기록, 로그에 trace_id 포함
+        val validation = validateOrder(orderId)
+        val payment = capturePayment(orderId)
         return ProcessResult(validation, payment)
     }
 
-    @Observed(contextualName = "validate-order")
-    private fun validateOrder(order: Order): ValidationResult {
+    @WithSpan("validate-order")
+    private fun validateOrder(orderId: Long): ValidationResult {
         // 자식 span 자동 생성
         return ValidationResult(...)
     }
 
-    @Observed(contextualName = "capture-payment")
-    private fun capturePayment(order: Order): PaymentResult {
+    @WithSpan("capture-payment")
+    private fun capturePayment(orderId: Long): PaymentResult {
         // 또 다른 자식 span
         return PaymentResult(...)
     }
@@ -747,24 +744,25 @@ process-order (300ms)
 
 ### 2. 수동 Span 생성
 
-더 세밀한 제어가 필요한 경우, Tracer를 직접 사용합니다.
+더 세밀한 제어가 필요하면 OTel API의 Tracer를 직접 사용합니다.
+Agent가 `GlobalOpenTelemetry`에 SDK를 등록하므로 거기서 Tracer를 가져옵니다.
 
 ```kotlin
-import io.micrometer.tracing.Tracer
+import io.opentelemetry.api.GlobalOpenTelemetry
 import org.springframework.stereotype.Service
 
 @Service
-class DataProcessingService(private val tracer: Tracer) {
+class DataProcessingService {
 
-    fun processLargeDataset() {
-        // 현재 span에 태그 추가
-        tracer.currentSpan()?.tag("dataset.size", "1000000")
+    private val tracer = GlobalOpenTelemetry.getTracer("data-processing")
 
+    fun processLargeDataset(batches: List<Batch>) {
         for ((batchIndex, batch) in batches.withIndex()) {
-            // 새로운 span 생성
-            val span = tracer.nextSpan().name("process-batch-$batchIndex")
+            val span = tracer.spanBuilder("process-batch-$batchIndex")
+                .setAttribute("dataset.size", 1_000_000L)
+                .startSpan()
             try {
-                span.start().use {
+                span.makeCurrent().use {
                     processBatch(batch)
                 }
             } finally {
@@ -775,47 +773,44 @@ class DataProcessingService(private val tracer: Tracer) {
 }
 ```
 
-### 3. Span 태그와 이벤트
+### 3. Span 속성과 이벤트
 
-span에 메타데이터를 추가합니다.
+현재 span에 메타데이터(속성)와 이벤트를 추가합니다.
 
 ```kotlin
-import io.micrometer.observation.Observation
+import io.opentelemetry.api.trace.Span
+import io.opentelemetry.api.trace.StatusCode
 import org.springframework.stereotype.Service
 
 @Service
-class TransactionService(private val tracer: Tracer) {
+class TransactionService {
 
+    @WithSpan("transaction.execution")
     fun executeTransaction(transId: String, amount: BigDecimal) {
-        val observation = Observation.createNotStarted(
-            "transaction.execution",
-            Observation.Context()
-        )
+        val span = Span.current()
 
-        observation.observe {
-            val span = tracer.currentSpan()
+        // 속성 추가 (검색 가능)
+        span.setAttribute("transaction.id", transId)
+        span.setAttribute("transaction.amount", amount.toString())
+        span.setAttribute("transaction.currency", "USD")
 
-            // 태그 추가 (검색 가능)
-            span?.tag("transaction.id", transId)
-            span?.tag("transaction.amount", amount.toString())
-            span?.tag("transaction.currency", "USD")
-
-            try {
-                val result = processTransaction(transId, amount)
-                span?.tag("transaction.status", "success")
-            } catch (e: Exception) {
-                span?.tag("transaction.status", "failed")
-                span?.tag("transaction.error", e.message)
-                throw e
-            }
+        try {
+            val result = processTransaction(transId, amount)
+            span.setAttribute("transaction.status", "success")
+            span.addEvent("transaction.completed")
+        } catch (e: Exception) {
+            span.setAttribute("transaction.status", "failed")
+            span.recordException(e)
+            span.setStatus(StatusCode.ERROR, e.message ?: "error")
+            throw e
         }
     }
 }
 ```
 
-**Tempo에서 검색**:
-- `transaction.status=success`
-- `transaction.amount=100.00`
+**Tempo에서 검색** (TraceQL):
+- `{ .transaction.status = "success" }`
+- `{ .transaction.amount = "100.00" }`
 
 ---
 
