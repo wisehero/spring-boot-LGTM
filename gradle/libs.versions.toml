@@ -2,7 +2,6 @@
 spring-boot = "3.4.1"
 kotlin = "1.9.22"
 micrometer = "1.14.2"
-micrometer-tracing = "1.4.1"
 opentelemetry = "1.45.0"
 opentelemetry-instrumentation = "2.12.0"
 loki4j = "1.5.2"
@@ -17,10 +16,9 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 
 micrometer-core = { module = "io.micrometer:micrometer-core", version.ref = "micrometer" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
-micrometer-tracing = { module = "io.micrometer:micrometer-tracing", version.ref = "micrometer-tracing" }
-micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel", version.ref = "micrometer-tracing" }
 
-opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
+# OTel API - Agent가 런타임에 구현체 제공 (SDK·trace 전송은 Java Agent가 담당)
+opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
 
 # Java Agent가 직접 지원하는 어노테이션 (@WithSpan, @SpanAttribute)
 opentelemetry-instrumentation-annotations = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations", version.ref = "opentelemetry-instrumentation" }
@@ -28,19 +26,7 @@ opentelemetry-instrumentation-annotations = { module = "io.opentelemetry.instrum
 loki-logback-appender = { module = "com.github.loki4j:loki-logback-appender", version.ref = "loki4j" }
 
 [bundles]
-# 라이브러리 방식: 앱에서 직접 OTel SDK를 사용하여 traces 전송
-observability = [
-    "spring-boot-starter-actuator",
-    "spring-boot-starter-aop",
-    "micrometer-core",
-    "micrometer-registry-prometheus",
-    "micrometer-tracing",
-    "micrometer-tracing-bridge-otel",
-    "opentelemetry-exporter-otlp",
-    "loki-logback-appender"
-]
-
-# Java Agent 방식: Agent가 traces 전송 처리
+# Java Agent 방식: Agent가 traces 전송 처리 (이 프로젝트의 단일 추적 방식)
 # Agent가 지원하는 @WithSpan 어노테이션과 OTel API 사용
 observability-agent = [
     "spring-boot-starter-actuator",

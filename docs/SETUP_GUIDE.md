@@ -35,7 +35,6 @@
 spring-boot = "3.4.1"
 kotlin = "1.9.22"
 micrometer = "1.14.2"
-micrometer-tracing = "1.4.1"
 opentelemetry = "1.45.0"
 opentelemetry-instrumentation = "2.12.0"
 loki4j = "1.5.2"
