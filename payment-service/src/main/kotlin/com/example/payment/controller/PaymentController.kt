@@ -22,4 +22,11 @@ class PaymentController(
             ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(payment)
     }
+
+    @PostMapping("/{id}/cancel")
+    fun cancelPayment(@PathVariable id: Long): ResponseEntity<Any> {
+        val payment = paymentService.cancelPayment(id)
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(payment)
+    }
 }

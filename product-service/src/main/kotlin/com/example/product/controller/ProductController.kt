@@ -35,12 +35,8 @@ class ProductController(
         @PathVariable id: Long,
         @RequestBody request: StockDecreaseRequest
     ): ResponseEntity<Any> {
-        return try {
-            val product = productService.decreaseStock(id, request.quantity)
-                ?: return ResponseEntity.notFound().build()
-            ResponseEntity.ok(product)
-        } catch (e: IllegalStateException) {
-            ResponseEntity.status(409).body(mapOf("error" to e.message))
-        }
+        val product = productService.decreaseStock(id, request.quantity)
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(product)
     }
 }

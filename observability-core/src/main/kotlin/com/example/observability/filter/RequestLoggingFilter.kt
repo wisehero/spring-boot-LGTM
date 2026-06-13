@@ -13,8 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter
  * Request/Response 로깅 필터
  *
  * 중요: traceId/spanId를 MDC에 수동으로 전파하지 마세요.
- * micrometer-tracing-bridge-otel을 사용하는 Micrometer Tracing이
- * traceId와 spanId를 MDC에 자동으로 채웁니다.
+ * OpenTelemetry Java Agent가 trace_id와 span_id(snake_case)를 MDC에 자동으로 채웁니다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 100)

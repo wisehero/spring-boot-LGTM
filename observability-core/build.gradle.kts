@@ -20,7 +20,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
     // OTel API - Agent가 런타임에 구현체 제공
-    implementation("io.opentelemetry:opentelemetry-api:1.45.0")
+    implementation(libs.opentelemetry.api)
 
     // Servlet Filter용
     compileOnly("jakarta.servlet:jakarta.servlet-api")

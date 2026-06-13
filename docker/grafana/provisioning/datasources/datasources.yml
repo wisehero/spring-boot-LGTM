@@ -46,3 +46,29 @@ datasources:
         hide: false
       lokiSearch:
         datasourceUid: loki
+
+  # ClickHouse: OTel Collector가 적재한 traces/logs를 SQL로 조회 (LGTM과 비교)
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    uid: clickhouse
+    access: proxy
+    editable: false
+    jsonData:
+      host: clickhouse
+      port: 9000
+      protocol: native
+      secure: false
+      username: default
+      defaultDatabase: otel
+      logs:
+        defaultTable: otel_logs
+        otelEnabled: true
+        otelVersion: latest
+        showLogLinks: true
+      traces:
+        defaultTable: otel_traces
+        otelEnabled: true
+        otelVersion: latest
+        durationUnit: nanoseconds
+        showTraceLinks: true
+      enableMapKeysDiscovery: false

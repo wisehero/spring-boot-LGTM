@@ -33,37 +33,48 @@ class PaymentService(
             PaymentStatus.APPROVED
         }
 
-        return savePayment(request, status)
+        // 단건 저장은 repository.save 자체가 원자적 트랜잭션이다.
+        // (이전 구현은 같은 클래스의 @Transactional savePayment를 self-invocation 하여
+        //  Spring 프록시를 우회했고, 그 결과 @Transactional 이 적용되지 않았다.)
+        val saved = paymentRepository.save(
+            Payment(
+                orderId = request.orderId,
+                amount = request.amount,
+                paymentMethod = request.paymentMethod,
+                status = status
+            )
+        )
+        return saved.toResponse()
     }
 
+    /**
+     * 결제 취소 (보상 트랜잭션).
+     * 주문 서비스에서 결제 승인 후 후속 단계(재고 차감 등)가 실패했을 때 호출되어
+     * 이미 승인된 결제를 CANCELLED 로 되돌린다 — 고아 결제(orphan payment)를 방지한다.
+     * 컨트롤러를 통해 외부에서 호출되므로 @Transactional 프록시가 정상 적용된다.
+     */
     @Transactional
-    fun savePayment(request: PaymentRequest, status: PaymentStatus): PaymentResponse {
-        val payment = Payment(
-            orderId = request.orderId,
-            amount = request.amount,
-            paymentMethod = request.paymentMethod,
-            status = status
-        )
-        val saved = paymentRepository.save(payment)
-        return PaymentResponse(
-            id = saved.id,
-            orderId = saved.orderId,
-            amount = saved.amount,
-            status = saved.status.name,
-            paymentMethod = saved.paymentMethod
-        )
+    fun cancelPayment(id: Long): PaymentResponse? {
+        log.info("결제 취소(보상): id={}", id)
+        val payment = paymentRepository.findById(id).orElse(null) ?: return null
+        if (payment.status == PaymentStatus.CANCELLED) {
+            log.info("이미 취소된 결제: id={}", id)
+            return payment.toResponse()
+        }
+        payment.status = PaymentStatus.CANCELLED
+        return paymentRepository.save(payment).toResponse()
     }
 
     fun getPayment(id: Long): PaymentResponse? {
         log.info("결제 조회: id={}", id)
-        return paymentRepository.findById(id).orElse(null)?.let {
-            PaymentResponse(
-                id = it.id,
-                orderId = it.orderId,
-                amount = it.amount,
-                status = it.status.name,
-                paymentMethod = it.paymentMethod
-            )
-        }
+        return paymentRepository.findById(id).orElse(null)?.toResponse()
     }
+
+    private fun Payment.toResponse(): PaymentResponse = PaymentResponse(
+        id = id,
+        orderId = orderId,
+        amount = amount,
+        status = status.name,
+        paymentMethod = paymentMethod
+    )
 }

@@ -21,5 +21,5 @@ class Payment(
 }
 
 enum class PaymentStatus {
-    PENDING, APPROVED, REJECTED
+    PENDING, APPROVED, REJECTED, CANCELLED
 }
