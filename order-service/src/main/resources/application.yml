@@ -7,7 +7,9 @@ spring:
     password: app
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # 로컬/기본 프로파일은 데이터를 보존(update). docker 프로파일(application-docker.yml)은
+      # 컨테이너마다 깨끗한 상태를 위해 create-drop 으로 오버라이드한다.
+      ddl-auto: update
     show-sql: false
 
 server:
@@ -29,12 +31,8 @@ management:
         http.server.requests: true
       percentiles:
         http.server.requests: 0.5, 0.95, 0.99
-  tracing:
-    sampling:
-      probability: 1.0
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
+  # 추적(trace)은 OpenTelemetry Java Agent가 전담한다(OTEL_* env로 샘플링·전송 제어).
+  # 런타임에 micrometer-tracing 브릿지가 없어 management.tracing/otlp 설정은 무효였으므로 제거함.
 
 services:
   product:
@@ -42,9 +40,16 @@ services:
   payment:
     url: http://localhost:8082
 
+# observability-core: @Service/@Repository 등 public 메서드 AOP span 생성 활성화
+# (미설정 시 TracingAspect 가 비활성 — OTel Java Agent 자동 계측만 동작)
+observability:
+  tracing:
+    aop:
+      enabled: true
+
 logging:
   level:
     root: INFO
     com.example: DEBUG
-  pattern:
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+  # 로그 출력 패턴은 logback-spring-observability.xml이 전담한다(Agent의 trace_id/span_id, snake_case).
+  # 여기 logging.pattern.level은 무시되던 camelCase 패턴이라 제거함.

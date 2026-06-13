@@ -22,7 +22,7 @@ cd spring-boot-LGTM
 # 빌드
 ./gradlew build
 
-# 전체 스택 실행 (LGTM + 샘플 앱 + PostgreSQL)
+# 전체 스택 실행 (LGTM + 마이크로서비스 3종 + PostgreSQL)
 cd docker && docker-compose up -d
 
 # 상태 확인
@@ -33,7 +33,9 @@ docker-compose ps
 
 | 서비스 | URL | 인증 |
 |--------|-----|------|
-| 샘플 앱 | http://localhost:8080 | - |
+| order-service | http://localhost:8080 | - |
+| product-service | http://localhost:8081 | - |
+| payment-service | http://localhost:8082 | - |
 | Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9090 | - |
 | Tempo | http://localhost:3200 | - |
@@ -71,33 +73,43 @@ flowchart TB
 
 ## 트레이스 예시
 
-`GET /api/complex` 호출 시 Tempo에서 확인되는 트레이스:
+`POST /api/orders` 호출 시 Tempo에서 확인되는 분산 트레이스 (3개 서비스에 걸침):
 
 ```
-GET /api/complex                           659ms
-├─ SampleController.complexOperation       650ms
-│  ├─ SampleService.getUserData             90ms
-│  │  └─ SELECT * FROM users WHERE id=?     56ms
-│  ├─ SampleService.getAllUsersWithStats   171ms
-│  │  ├─ SELECT * FROM users               114ms
-│  │  └─ SELECT COUNT(*) FROM users          2ms
-│  └─ SampleService.performOperation       260ms
-└─ Response encoding                         8ms
+POST /api/orders                              520ms  [order-service]
+└─ OrderService.createOrder                   515ms
+   ├─ GET /api/products/{id}        [HTTP]      12ms  → product-service
+   │  └─ ProductService.getProduct              8ms
+   │     └─ SELECT * FROM products WHERE id=?   3ms
+   ├─ GET /api/products/{id}/stock   [HTTP]     10ms  → product-service
+   ├─ INSERT INTO orders                         5ms
+   ├─ POST /api/payments             [HTTP]    300ms  → payment-service
+   │  └─ PaymentService.processPayment         295ms  (결제 지연 시뮬레이션 100~500ms)
+   │     └─ INSERT INTO payments                 4ms
+   ├─ PATCH /api/products/{id}/stock [HTTP]     15ms  → product-service
+   │  └─ ProductService.decreaseStock           10ms
+   │     └─ UPDATE products SET stock=?,version=? 5ms
+   └─ UPDATE orders SET status=?                 5ms
 ```
+
+> 메서드 레벨 span(`OrderService.createOrder` 등)은 `observability-core`의 `TracingAspect`가 생성하며,
+> `observability.tracing.aop.enabled=true`(각 서비스 `application.yml`에 설정됨)일 때 활성화된다.
+> HTTP/JDBC span은 OpenTelemetry Java Agent가 자동 계측한다.
 
 ## 프로젝트 구조
 
 ```
 spring-boot-LGTM/
-├── observability-core/          # 재사용 가능한 관측가능성 모듈
+├── observability-core/          # 재사용 가능한 관측가능성 모듈 (스타터)
 │   └── src/.../observability/
-│       ├── aspect/TracingAspect.kt
-│       └── config/
-├── sample-app/                  # 샘플 애플리케이션
-│   ├── Dockerfile               # OTel Java Agent 포함
-│   └── src/.../sample/
-├── docker/                      # LGTM 인프라
-│   ├── docker-compose.yml
+│       ├── aspect/              # TracingAspect, ObservabilityAspect
+│       ├── config/              # ObservabilityAutoConfiguration, Metrics/Tracing/Logging
+│       └── filter/              # RequestLoggingFilter
+├── order-service/               # 주문 (오케스트레이터: product·payment 호출 + 결제 보상)
+├── product-service/             # 상품·재고 (낙관적 락)
+├── payment-service/             # 결제 (시뮬레이션 + 보상 취소 API)
+├── docker/                      # LGTM 인프라 + 서비스 컨테이너
+│   ├── docker-compose.yml       # 서비스 Dockerfile은 OTel Java Agent 포함
 │   ├── prometheus/
 │   ├── loki/
 │   ├── tempo/
