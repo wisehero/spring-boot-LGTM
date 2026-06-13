@@ -1,10 +1,7 @@
 package com.example.order.controller
 
 import com.example.order.dto.CreateOrderRequest
-import com.example.order.service.InsufficientStockException
 import com.example.order.service.OrderService
-import com.example.order.service.ProductNotFoundException
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -15,19 +12,8 @@ class OrderController(
 ) {
     @PostMapping
     fun createOrder(@RequestBody request: CreateOrderRequest): ResponseEntity<Any> {
-        return try {
-            val order = orderService.createOrder(request)
-            ResponseEntity.ok(order)
-        } catch (e: ProductNotFoundException) {
-            ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(mapOf("error" to e.message))
-        } catch (e: InsufficientStockException) {
-            ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(mapOf("error" to e.message))
-        } catch (e: Exception) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to (e.message ?: "Internal server error")))
-        }
+        val order = orderService.createOrder(request)
+        return ResponseEntity.ok(order)
     }
 
     @GetMapping("/{id}")

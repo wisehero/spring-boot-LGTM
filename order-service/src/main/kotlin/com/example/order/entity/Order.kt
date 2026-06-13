@@ -17,9 +17,11 @@ class Order(
     @Enumerated(EnumType.STRING)
     var status: OrderStatus = OrderStatus.CREATED,
     var paymentId: Long? = null,
-    var createdAt: LocalDateTime = LocalDateTime.now()
+    var createdAt: LocalDateTime = LocalDateTime.now(),
+    @Version
+    var version: Long = 0
 ) {
-    protected constructor() : this(0, 0, "", 0, BigDecimal.ZERO, OrderStatus.CREATED, null, LocalDateTime.now())
+    protected constructor() : this(0, 0, "", 0, BigDecimal.ZERO, OrderStatus.CREATED, null, LocalDateTime.now(), 0)
 }
 
 enum class OrderStatus {
