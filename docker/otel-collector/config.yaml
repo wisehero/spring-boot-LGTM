@@ -20,6 +20,7 @@ exporters:
     endpoint: tcp://clickhouse:9000?dial_timeout=10s
     database: otel
     username: default
+    password: otel
     ttl: 72h
     create_schema: true
     logs_table_name: otel_logs

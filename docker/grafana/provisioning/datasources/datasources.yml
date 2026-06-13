@@ -72,3 +72,5 @@ datasources:
         durationUnit: nanoseconds
         showTraceLinks: true
       enableMapKeysDiscovery: false
+    secureJsonData:
+      password: otel

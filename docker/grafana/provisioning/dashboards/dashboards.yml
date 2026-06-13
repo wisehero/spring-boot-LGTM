@@ -11,3 +11,15 @@ providers:
     allowUiUpdates: true
     options:
       path: /etc/grafana/provisioning/dashboards
+
+  # ClickHouse 대시보드는 별도 폴더로 분리 (LGTM 대시보드와 구분)
+  - name: 'clickhouse'
+    orgId: 1
+    folder: '클릭하우스 (OTel)'
+    folderUid: 'clickhouse-dashboards'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards-clickhouse
